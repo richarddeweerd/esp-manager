@@ -1,4 +1,5 @@
 #include <EspManager.h>
+#include <FakePlatform.h>
 #include <unity.h>
 
 #include <string>
@@ -21,7 +22,8 @@ void test_version_string_matches_version_numbers()
 
 void test_begin_and_process_can_be_called_from_global_namespace()
 {
-    EspManager esp;
+    espmgr::FakePlatform fakes;
+    EspManager esp(fakes.platform);
     esp.begin();
     esp.process();
     esp.process();

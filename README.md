@@ -72,7 +72,9 @@ The checks that run on every merge request are in `scripts/`:
 scripts/build-examples.sh esp32dev
 ```
 
-builds every sketch in `examples/` for one board. `scripts/check-format.sh` checks formatting against `.clang-format`, and `scripts/check-versions.py` checks that `library.json`, `library.properties` and `src/EspManagerVersion.h` have the same version.
+builds every sketch in `examples/` for one board. `scripts/check-format.sh` checks formatting against `.clang-format`, `scripts/check-versions.py` checks that `library.json`, `library.properties` and `src/EspManagerVersion.h` have the same version, and `scripts/check-includes.sh` checks that only `src/platform/` uses Arduino or ESP-IDF headers.
+
+The library's logic reaches the hardware only through four small interfaces in `src/core/` (`WifiDriver`, `Storage`, `Clock` and `HttpServer`). The ESP32 versions are in `src/platform/esp32/`; the unit tests use the fakes in `test/fakes/` instead, which is why they run without a board.
 
 ## Licence
 
