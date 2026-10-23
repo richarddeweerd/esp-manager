@@ -50,6 +50,22 @@ void loop()
 - Wi-Fi credentials are stored in the ESP32's NVS flash. They are only encrypted at rest if you enable ESP32 flash and NVS encryption.
 - The device can't realistically serve HTTPS, so the management page uses HTTP Digest authentication and assumes a trusted local network.
 
+## Building and testing
+
+Requires [PlatformIO](https://platformio.org/) running on Python 3.10–3.14.
+
+```bash
+pio run
+```
+
+builds `examples/Basic` for ESP32, ESP32-S3 and ESP32-C3.
+
+```bash
+pio test -e native
+```
+
+runs the unit tests on your computer; no board is needed.
+
 ## Licence
 
-MIT. The licence file will be added with the first code.
+MIT, see [LICENSE](LICENSE).
