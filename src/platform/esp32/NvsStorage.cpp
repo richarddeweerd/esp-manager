@@ -1,6 +1,7 @@
 #include "platform/esp32/NvsStorage.h"
 
 #include <Preferences.h>
+#include <nvs.h>
 
 namespace espmgr
 {
@@ -8,13 +9,24 @@ namespace espmgr
 namespace
 {
 
-// Opens a namespace for one call. Read-only opening fails if the namespace doesn't exist yet,
+// Preferences logs an error when it opens a namespace that doesn't exist yet read-only, which
+// is normal on a new device. Asking NVS directly first stays quiet.
+bool namespaceExists(const std::string& ns)
+{
+    nvs_iterator_t it = nullptr;
+    const esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, ns.c_str(), NVS_TYPE_ANY, &it);
+    nvs_release_iterator(it);
+    return err == ESP_OK;
+}
+
+// Opens a namespace for one call. A namespace that doesn't exist yet isn't opened for reading,
 // which the getters treat as "no value".
 class Session
 {
 public:
     Session(const std::string& ns, bool readOnly)
-        : open_(Storage::isValidName(ns) && prefs_.begin(ns.c_str(), readOnly))
+        : open_(Storage::isValidName(ns) && (!readOnly || namespaceExists(ns)) &&
+                prefs_.begin(ns.c_str(), readOnly))
     {
     }
 

@@ -50,6 +50,14 @@ void Esp32WifiDriver::onDisconnected(uint8_t reason)
     {
         return;
     }
+    // connect() stops any earlier attempt first. The event for that can arrive after the new
+    // attempt has started, and only ever says that we left.
+    const bool weLeft = reason == WIFI_REASON_ASSOC_LEAVE || reason == WIFI_REASON_AUTH_LEAVE ||
+                        reason == WIFI_REASON_STA_LEAVING;
+    if (connecting_ && !wasConnected_ && weLeft)
+    {
+        return;
+    }
     lastFailure_ = wasConnected_ ? FailureReason::ConnectionLost : mapReason(reason);
     connecting_ = false;
     wasConnected_ = false;
@@ -102,8 +110,17 @@ void Esp32WifiDriver::applyMode()
 void Esp32WifiDriver::connect(const std::string& ssid, const std::string& password)
 {
     ensureStarted();
-    lastFailure_ = FailureReason::None;
+
+    // A failed attempt can still be running inside the Wi-Fi stack (it keeps looking for a
+    // network it didn't find), and then WiFi.begin() is refused. Stop it first.
+    connecting_ = false;
     wasConnected_ = false;
+    if (stationWanted_)
+    {
+        WiFi.disconnect();
+    }
+
+    lastFailure_ = FailureReason::None;
     connecting_ = true;
     stationWanted_ = true;
 
