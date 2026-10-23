@@ -66,6 +66,14 @@ pio test -e native
 
 runs the unit tests on your computer; no board is needed.
 
+The checks that run on every merge request are in `scripts/`:
+
+```bash
+scripts/build-examples.sh esp32dev
+```
+
+builds every sketch in `examples/` for one board. `scripts/check-format.sh` checks formatting against `.clang-format`, and `scripts/check-versions.py` checks that `library.json`, `library.properties` and `src/EspManagerVersion.h` have the same version.
+
 ## Licence
 
 MIT, see [LICENSE](LICENSE).
