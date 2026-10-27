@@ -76,6 +76,18 @@ builds every sketch in `examples/` for one board. `scripts/check-format.sh` chec
 
 The library's logic reaches the hardware only through four small interfaces in `src/core/` (`WifiDriver`, `Storage`, `Clock` and `HttpServer`). The ESP32 versions are in `src/platform/esp32/`; the unit tests use the fakes in `test/fakes/` instead, which is why they run without a board.
 
+### On-device tests
+
+The tests in `test/test_hw_platform/` run on a board and check the ESP32 versions of those interfaces against real hardware: scanning and connecting, the access point, NVS storage and the web server. Build them and run them on a connected board with
+
+```bash
+scripts/build-hw-tests.sh esp32-s3-devkitc-1 hw-firmware
+ESPMGR_TEST_SSID=<network> ESPMGR_TEST_PASSWORD=<password> \
+    scripts/run-hw-tests.py --port <serial port> --firmware hw-firmware/esp32-s3-devkitc-1/test_hw_platform.bin
+```
+
+`run-hw-tests.py` needs `esptool` and `pyserial`. It flashes the board, sends it the Wi-Fi network to test against over the serial port (the password is never printed), checks the board's web server from your computer, so both must be on the same network, and can write a JUnit report with `--junit`. Without a network the tests that need one are ignored. Plain `pio test -e <board>` runs them too, also without the network tests. The ESP32-S3 environment prints to the native USB port.
+
 ## Licence
 
 MIT, see [LICENSE](LICENSE).
