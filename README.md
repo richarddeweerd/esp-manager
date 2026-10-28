@@ -40,6 +40,15 @@ void loop()
 }
 ```
 
+After a restart the device connects to its Saved Network by itself. Until the Provisioning Portal exists, a sketch can save one directly, and check where the connection stands:
+
+```cpp
+esp.networks().save("Home", "wifi password");  // stored in NVS; replaces the previous one
+if (esp.state() == espmgr::ConnectionState::Connected) { /* … */ }
+```
+
+The connection state is `Idle` (no Saved Network), `Connecting`, `Connected` or `Waiting` (to try again after a failure or a lost connection).
+
 The library is silent by default. To see what it does, start `Serial` and pick a log level (`Error`, `Warn`, `Info`, `Debug` or `Verbose`):
 
 ```cpp

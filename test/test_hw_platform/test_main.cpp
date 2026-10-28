@@ -4,9 +4,7 @@
 // answers the HTTP checks. A plain `pio test -e <board>` works too, but then nothing answers
 // and the tests that need a network are ignored.
 //
-// Serial protocol, one line each way:
-//   board → host  "ESPMGR-HW READY"           repeated until the host answers
-//   host → board  "WIFI\t<ssid>\t<password>"  or "NOWIFI"
+// Serial protocol, one line each way, after the handshake in test/hw/HostLink.h:
 //   board → host  "ESPMGR-HW HTTP <ip>"       the host now runs its HTTP checks
 //   host → board  "HTTP DONE ok"              or "HTTP DONE <what failed>"
 
@@ -14,6 +12,8 @@
 #include <core/SavedNetworkStore.h>
 #include <platform/esp32/Esp32Platform.h>
 #include <unity.h>
+
+#include "../hw/HostLink.h"
 
 #include <algorithm>
 
@@ -30,73 +30,15 @@ const char* const kRealm = "esp-manager-hw";
 const char* const kUser = "admin";
 const char* const kAuthPassword = "hw-check";
 
-std::string testSsid;
-std::string testPassword;
+using hostlink::haveNetwork;
+using hostlink::readLine;
+using hostlink::testPassword;
+using hostlink::testSsid;
 uint8_t testChannel = 0;
-
-bool haveNetwork()
-{
-    return !testSsid.empty();
-}
-
-// Reads one line from Serial, waiting at most `timeoutMs`. Returns false on a timeout.
-bool readLine(std::string& line, uint32_t timeoutMs)
-{
-    line.clear();
-    const uint32_t start = millis();
-    while (millis() - start < timeoutMs)
-    {
-        while (Serial.available() > 0)
-        {
-            const char c = static_cast<char>(Serial.read());
-            if (c == '\n')
-            {
-                return true;
-            }
-            if (c != '\r')
-            {
-                line += c;
-            }
-        }
-        delay(5);
-    }
-    return false;
-}
-
-void askForNetwork(uint32_t timeoutMs)
-{
-    const uint32_t start = millis();
-    std::string line;
-    while (millis() - start < timeoutMs)
-    {
-        Serial.println("ESPMGR-HW READY");
-        if (!readLine(line, 500))
-        {
-            continue;
-        }
-        if (line.rfind("WIFI\t", 0) == 0)
-        {
-            const size_t tab = line.find('\t', 5);
-            if (tab != std::string::npos)
-            {
-                testSsid = line.substr(5, tab - 5);
-                testPassword = line.substr(tab + 1);
-            }
-            return;
-        }
-        if (line == "NOWIFI")
-        {
-            return;
-        }
-    }
-}
 
 void requireNetwork()
 {
-    if (!haveNetwork())
-    {
-        TEST_IGNORE_MESSAGE("no test network (run through scripts/run-hw-tests.py)");
-    }
+    HOSTLINK_REQUIRE_NETWORK();
 }
 
 StationStatus waitWhileConnecting(uint32_t timeoutMs)
@@ -375,7 +317,7 @@ void test_saved_networks_survive_nvs()
 void setup()
 {
     Serial.begin(115200);
-    askForNetwork(10000);
+    hostlink::askForNetwork(10000);
 
     UNITY_BEGIN();
     RUN_TEST(test_clock_advances_in_milliseconds);

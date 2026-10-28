@@ -3,6 +3,9 @@
 #include "EspManagerVersion.h"
 #include "core/Events.h"
 #include "core/Logger.h"
+#include "core/SavedNetworkStore.h"
+#include "core/SavedNetworks.h"
+#include "core/WifiConnection.h"
 
 #include <functional>
 #include <memory>
@@ -26,7 +29,7 @@ public:
     EspManager(const EspManager&) = delete;
     EspManager& operator=(const EspManager&) = delete;
 
-    // Returns immediately; all work happens in process().
+    // Loads the Saved Networks and returns immediately; connecting happens in process().
     void begin();
 
     // Handles pending work without blocking. Call it on every loop().
@@ -35,6 +38,13 @@ public:
     // How much the library prints to Serial; off by default. For example
     // `esp.setLogLevel(espmgr::LogLevel::Debug);`. Call Serial.begin() first.
     void setLogLevel(LogLevel level);
+
+    // Where the Wi-Fi connection stands: Idle, Connecting, Connected or Waiting (to retry).
+    ConnectionState state() const;
+
+    // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
+    // saved while Idle is connected to on the next process().
+    SavedNetworks& networks();
 
     // Events. Each call adds a listener; any number can be added, and they can't be removed.
     // Listeners are only ever called from inside process(), after the change they report, so
@@ -66,6 +76,9 @@ private:
     Platform& platform_;
     Logger log_;
     Events events_{log_};
+    SavedNetworkStore store_;
+    SavedNetworks networks_{store_, log_};
+    WifiConnection connection_;
 };
 
 }  // namespace espmgr

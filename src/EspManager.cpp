@@ -8,24 +8,39 @@ namespace espmgr
 {
 
 // The default constructor is in platform/esp32/Esp32Platform.cpp.
-EspManager::EspManager(Platform& platform) : platform_(platform), log_(platform.log, platform.clock)
+EspManager::EspManager(Platform& platform)
+    : platform_(platform), log_(platform.log, platform.clock), store_(platform.storage, log_),
+      connection_(platform.wifi, platform.clock, networks_, events_, log_)
 {
 }
 
 void EspManager::begin()
 {
     log_.info("core", "EspManager %s starting", ESPMGR_VERSION);
+    networks_.load();
+    connection_.begin();
 }
 
 void EspManager::process()
 {
     // The parts do their work first; listeners then see the result.
+    connection_.process();
     events_.deliver();
 }
 
 void EspManager::setLogLevel(LogLevel level)
 {
     log_.setLevel(level);
+}
+
+ConnectionState EspManager::state() const
+{
+    return connection_.state();
+}
+
+SavedNetworks& EspManager::networks()
+{
+    return networks_;
 }
 
 EspManager& EspManager::onConnected(std::function<void(const ConnectedInfo&)> listener)
