@@ -11,6 +11,7 @@
 //   host → board  "HTTP DONE ok"              or "HTTP DONE <what failed>"
 
 #include <Arduino.h>
+#include <core/SavedNetworkStore.h>
 #include <platform/esp32/Esp32Platform.h>
 #include <unity.h>
 
@@ -333,6 +334,44 @@ void test_storage_reads_nothing_from_a_missing_namespace()
     TEST_ASSERT_FALSE(hw.storage.getU32("espmgr-nothere", "key").has_value());
 }
 
+// --- SavedNetworkStore on NVS ---
+
+void test_saved_networks_survive_nvs()
+{
+    Logger log(hw.log, hw.clock);
+    SavedNetworkStore store(hw.storage, log);
+    const std::string backupNs = SavedNetworkStore::kNamespace;
+    const std::optional<std::vector<uint8_t>> previous =
+        hw.storage.getBytes(backupNs, SavedNetworkStore::kKey);
+
+    SavedNetwork dhcp;
+    dhcp.ssid = "espmgr-hw-a";
+    dhcp.password = "first password";
+    SavedNetwork fixed;
+    fixed.ssid = std::string(32, 'b');
+    fixed.password = std::string(64, 'c');
+    fixed.priority = 3;
+    fixed.dhcp = false;
+    fixed.staticIp = {Ipv4Address(10, 42, 0, 50), Ipv4Address(10, 42, 0, 1),
+                      Ipv4Address(255, 255, 255, 0), Ipv4Address(10, 42, 0, 1), Ipv4Address()};
+
+    TEST_ASSERT_TRUE(store.save({dhcp, fixed}));
+    const SavedNetworkStore::LoadResult result = store.load();
+    TEST_ASSERT_EQUAL(SavedNetworkStore::LoadStatus::Ok, result.status);
+    TEST_ASSERT_EQUAL(2, result.networks.size());
+    TEST_ASSERT_TRUE(result.networks[0] == dhcp);
+    TEST_ASSERT_TRUE(result.networks[1] == fixed);
+
+    TEST_ASSERT_TRUE(store.clear());
+    TEST_ASSERT_EQUAL(SavedNetworkStore::LoadStatus::Missing, store.load().status);
+
+    // Put back whatever the board had saved before the test.
+    if (previous)
+    {
+        hw.storage.putBytes(backupNs, SavedNetworkStore::kKey, *previous);
+    }
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -353,6 +392,7 @@ void setup()
     RUN_TEST(test_storage_rejects_names_longer_than_nvs_allows);
     RUN_TEST(test_storage_remove_and_clear);
     RUN_TEST(test_storage_reads_nothing_from_a_missing_namespace);
+    RUN_TEST(test_saved_networks_survive_nvs);
     UNITY_END();
 
     hw.wifi.disconnect();
