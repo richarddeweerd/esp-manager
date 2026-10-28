@@ -5,6 +5,7 @@
 #include "platform/esp32/Esp32HttpServer.h"
 #include "platform/esp32/Esp32WifiDriver.h"
 #include "platform/esp32/NvsStorage.h"
+#include "platform/esp32/SerialLogSink.h"
 
 namespace espmgr
 {
@@ -28,7 +29,8 @@ private:
     NvsStorage storage_;
     Esp32Clock clock_;
     Esp32HttpServer http_;
-    Platform platform_{wifi_, storage_, clock_, http_};
+    SerialLogSink log_;
+    Platform platform_{wifi_, storage_, clock_, http_, log_};
 };
 
 }  // namespace espmgr

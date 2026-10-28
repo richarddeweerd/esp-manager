@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EspManagerVersion.h"
+#include "core/Logger.h"
 
 #include <memory>
 
@@ -27,12 +28,16 @@ public:
     // Handles pending work without blocking. Call it on every loop().
     void process();
 
+    // How much the library prints to Serial; off by default. For example
+    // `esp.setLogLevel(espmgr::LogLevel::Debug);`. Call Serial.begin() first.
+    void setLogLevel(LogLevel level);
+
 private:
     // Owns the ESP32 hardware objects when the default constructor made them. Type-erased, so
     // this header doesn't depend on the ESP32 code.
     std::shared_ptr<void> ownedPlatform_;
-    // Not used yet; the connection state machine (#7) will drive it.
-    [[maybe_unused]] Platform& platform_;
+    Platform& platform_;
+    Logger log_;
 };
 
 }  // namespace espmgr

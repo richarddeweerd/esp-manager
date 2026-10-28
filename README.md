@@ -40,6 +40,15 @@ void loop()
 }
 ```
 
+The library is silent by default. To see what it does, start `Serial` and pick a log level (`Error`, `Warn`, `Info`, `Debug` or `Verbose`):
+
+```cpp
+Serial.begin(115200);
+esp.setLogLevel(espmgr::LogLevel::Debug);
+```
+
+Passwords are never logged at any level.
+
 ## Supported hardware
 
 - ESP32, ESP32-S3 and ESP32-C3 on Arduino-ESP32 core 3.x, built with PlatformIO.
@@ -87,6 +96,10 @@ ESPMGR_TEST_SSID=<network> ESPMGR_TEST_PASSWORD=<password> \
 ```
 
 `run-hw-tests.py` needs `esptool` and `pyserial`. It flashes the board, sends it the Wi-Fi network to test against over the serial port (the password is never printed), checks the board's web server from your computer, so both must be on the same network, and can write a JUnit report with `--junit`. Without a network the tests that need one are ignored. Plain `pio test -e <board>` runs them too, also without the network tests. The ESP32-S3 environment prints to the native USB port.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), including the review checklist.
 
 ## Licence
 
