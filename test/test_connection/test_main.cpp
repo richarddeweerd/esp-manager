@@ -43,6 +43,9 @@ struct Device
 
     Device()
     {
+        // These tests are about the states themselves: without a scan, each attempt connects
+        // straight away. test_reconnect covers scanning and the retry schedule.
+        fakes.wifi.scanStartSucceeds = false;
         esp.onConnectionStateChanged(
                [this](ConnectionState from, ConnectionState to)
                { events.push_back(std::string(name(from)) + ">" + name(to)); })
@@ -133,6 +136,7 @@ void test_begin_returns_without_connecting()
 void test_connects_to_the_stored_network_after_a_restart()
 {
     FakePlatform fakes;
+    fakes.wifi.scanStartSucceeds = false;
     {
         EspManager firstBoot(fakes.platform);
         TEST_ASSERT_TRUE(firstBoot.networks().save("Home", "correct horse"));
@@ -186,7 +190,7 @@ void test_failed_attempt_waits_then_retries()
         ("Connecting>Waiting, failed Home " + text(FailureReason::WrongPassword)).c_str(),
         d.takeEvents().c_str());
 
-    d.fakes.clock.advance(WifiConnection::kRetryDelayMs - 1);
+    d.fakes.clock.advance(WifiConnection::kDefaultMinRetryDelayMs - 1);
     d.esp.process();
     d.assertState(ConnectionState::Waiting);
     TEST_ASSERT_EQUAL(1, d.fakes.wifi.connectCalls.size());
@@ -250,7 +254,7 @@ void test_lost_connection_waits_then_reconnects()
         ("Connected>Waiting, lost " + text(FailureReason::ConnectionLost)).c_str(),
         d.takeEvents().c_str());
 
-    d.fakes.clock.advance(WifiConnection::kRetryDelayMs);
+    d.fakes.clock.advance(WifiConnection::kDefaultMinRetryDelayMs);
     d.esp.process();
     d.assertState(ConnectionState::Connecting);
     d.fakes.wifi.completeConnect();
@@ -287,7 +291,7 @@ void test_network_saved_while_connected_is_used_from_the_next_attempt()
 
     d.fakes.wifi.loseConnection();
     d.esp.process();
-    d.fakes.clock.advance(WifiConnection::kRetryDelayMs);
+    d.fakes.clock.advance(WifiConnection::kDefaultMinRetryDelayMs);
     d.esp.process();
     TEST_ASSERT_EQUAL_STRING("Office", d.fakes.wifi.connectCalls.back().ssid.c_str());
 }
