@@ -1,6 +1,6 @@
 // On-device test of EspManager as a sketch uses it: the default constructor on real hardware,
 // a network saved with esp.networks(), then begin() and waitForConnection(), which calls
-// process() (#7, #9).
+// process() (#7, #9), the default hostname and a static-IP Saved Network (#10).
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
 // The test network stays saved on the board afterwards, as it would after setup.
@@ -98,6 +98,52 @@ void test_each_process_call_is_short()
     TEST_ASSERT_EQUAL_STRING("Connected", name(esp.state()));
 }
 
+// Reconnects through the state machine: drops the connection and waits for the next attempt.
+bool reconnect()
+{
+    WiFi.disconnect();
+    return esp.waitForConnection(30000);
+}
+
+void test_hostname_reaches_the_wifi_stack()
+{
+    HOSTLINK_REQUIRE_NETWORK();
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    char expected[16];
+    snprintf(expected, sizeof(expected), "esp-%02x%02x%02x", mac[3], mac[4], mac[5]);
+    TEST_ASSERT_EQUAL_STRING(expected, esp.hostname().c_str());
+    TEST_ASSERT_EQUAL_STRING(expected, WiFi.STA.getHostname());
+}
+
+void test_static_ip_saved_network_gets_its_address()
+{
+    HOSTLINK_REQUIRE_NETWORK();
+    // Below the range the rig's access point hands out (10.42.0.10 and up).
+    espmgr::SavedNetwork network;
+    network.ssid = hostlink::testSsid;
+    network.password = hostlink::testPassword;
+    network.dhcp = false;
+    network.staticIp = {espmgr::Ipv4Address(10, 42, 0, 5), espmgr::Ipv4Address(10, 42, 0, 1),
+                        espmgr::Ipv4Address(255, 255, 255, 0), espmgr::Ipv4Address(10, 42, 0, 1),
+                        espmgr::Ipv4Address()};
+    TEST_ASSERT_TRUE(esp.networks().save(network));
+    TEST_ASSERT_TRUE_MESSAGE(reconnect(), "not reconnected within 30 s");
+    TEST_ASSERT_EQUAL_STRING("10.42.0.5", connected.ip.toString().c_str());
+    TEST_ASSERT_EQUAL_STRING("10.42.0.5", WiFi.localIP().toString().c_str());
+    TEST_ASSERT_EQUAL_STRING("10.42.0.1", WiFi.gatewayIP().toString().c_str());
+}
+
+void test_back_to_dhcp_gets_a_leased_address()
+{
+    HOSTLINK_REQUIRE_NETWORK();
+    TEST_ASSERT_TRUE(esp.networks().save(hostlink::testSsid, hostlink::testPassword));
+    TEST_ASSERT_TRUE_MESSAGE(reconnect(), "not reconnected within 30 s");
+    TEST_ASSERT_NOT_EQUAL(5, connected.ip[3]);
+    TEST_ASSERT_EQUAL_UINT8(10, connected.ip[0]);
+    TEST_ASSERT_EQUAL_UINT8(42, connected.ip[1]);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -116,6 +162,9 @@ void setup()
     RUN_TEST(test_begin_returns_at_once_and_stays_idle);
     RUN_TEST(test_wait_for_connection_connects_to_the_saved_network);
     RUN_TEST(test_each_process_call_is_short);
+    RUN_TEST(test_hostname_reaches_the_wifi_stack);
+    RUN_TEST(test_static_ip_saved_network_gets_its_address);
+    RUN_TEST(test_back_to_dhcp_gets_a_leased_address);
     UNITY_END();
 
     // Leave the test network properly before the next test is flashed. A board that is just

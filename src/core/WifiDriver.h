@@ -98,8 +98,10 @@ public:
     // The radio's current channel, shared by station and access point.
     virtual uint8_t channel() const = 0;
 
-    // Used by the next connect().
+    // The name given to the router; set it before the first scan or connect, as later changes
+    // only reach the router with the next DHCP lease.
     virtual void setHostname(const std::string& hostname) = 0;
+    // Addressing for the next connect().
     virtual void useDhcp() = 0;
     virtual void useStaticIp(const StaticIpConfig& config) = 0;
 

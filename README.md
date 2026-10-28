@@ -47,6 +47,18 @@ esp.networks().save("Home", "wifi password");  // stored in NVS; replaces the pr
 if (esp.state() == espmgr::ConnectionState::Connected) { /* … */ }
 ```
 
+The device tells the router its name, `esp-` plus the last six hex digits of its MAC address (such as `esp-abcdef`). Change it before `begin()` with `esp.setHostname("kitchen-lamp")`, or keep the MAC part and change only the prefix with `esp.setNamePrefix("lamp")`. A Saved Network uses DHCP unless it's saved with a static address:
+
+```cpp
+espmgr::SavedNetwork office;
+office.ssid = "Office";
+office.password = "wifi password";
+office.dhcp = false;
+office.staticIp = {espmgr::Ipv4Address(192, 168, 1, 50), espmgr::Ipv4Address(192, 168, 1, 1),
+                   espmgr::Ipv4Address(255, 255, 255, 0), espmgr::Ipv4Address(192, 168, 1, 1), {}};
+esp.networks().save(office);
+```
+
 `begin()` never waits. A sketch that needs Wi-Fi before it goes on can opt in to waiting with `esp.waitForConnection(10000)`, which keeps calling `process()` and returns `true` once connected or `false` after the timeout (10 s here); connecting carries on in `process()` either way.
 
 The connection state is `Idle` (no Saved Network), `Connecting`, `Connected` or `Waiting` (to try again after a failure or a lost connection). Each attempt scans first and joins the best Saved Network in range. After a failure the device waits before trying again, 1 s at first and twice as long after each further failure, up to 5 minutes, with some randomness so devices don't all retry at once. `esp.setRetryDelays(minMs, maxMs)` changes those limits, and `esp.lastFailure()` tells why the last attempt failed (`espmgr::toString()` turns it into text such as "wrong password").
