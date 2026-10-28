@@ -9,7 +9,8 @@ namespace espmgr
 // folder, can only construct an EspManager with fakes.
 EspManager::EspManager()
     : ownedPlatform_(std::make_shared<Esp32Platform>()),
-      platform_(static_cast<Esp32Platform*>(ownedPlatform_.get())->platform())
+      platform_(static_cast<Esp32Platform*>(ownedPlatform_.get())->platform()),
+      log_(platform_.log, platform_.clock)
 {
 }
 
