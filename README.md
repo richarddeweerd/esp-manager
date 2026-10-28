@@ -49,6 +49,17 @@ esp.setLogLevel(espmgr::LogLevel::Debug);
 
 Passwords are never logged at any level.
 
+To react to what the library does, add listeners. Any number can listen to each event, and they're only ever called from inside `process()`, so they may safely call back into `esp`:
+
+```cpp
+esp.onConnected([](const espmgr::ConnectedInfo& info) {
+       Serial.printf("Connected to %s as %s\n", info.ssid.c_str(), info.ip.toString().c_str());
+   })
+   .onPortalStarted([](const std::string& ssid) { Serial.printf("Set me up via %s\n", ssid.c_str()); });
+```
+
+The events are `onConnected`, `onDisconnected`, `onConnectFailed`, `onConnectionStateChanged`, `onPortalStarted`, `onPortalStopped` and `onProvisioningCompleted`.
+
 ## Supported hardware
 
 - ESP32, ESP32-S3 and ESP32-C3 on Arduino-ESP32 core 3.x, built with PlatformIO.
