@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 #include <EspManager.h>
+#include <WiFi.h>
 #include <unity.h>
 
 #include "../hw/HostLink.h"
@@ -130,6 +131,12 @@ void setup()
     RUN_TEST(test_process_connects_to_the_saved_network);
     RUN_TEST(test_each_process_call_is_short);
     UNITY_END();
+
+    // Leave the test network properly before the next test is flashed. A board that is just
+    // reset stays listed at the Pi's access point, which then refuses its next attempts for a
+    // while. EspManager has no disconnect() yet, so go to the Wi-Fi library directly.
+    WiFi.disconnect();
+    delay(500);
 }
 
 void loop()
