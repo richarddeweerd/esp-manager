@@ -49,6 +49,11 @@ public:
 
     void process();
 
+    bool started() const
+    {
+        return started_;
+    }
+
     ConnectionState state() const
     {
         return state_;
