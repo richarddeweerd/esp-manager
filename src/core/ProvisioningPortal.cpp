@@ -1,5 +1,6 @@
 #include "core/ProvisioningPortal.h"
 
+#include "core/JsonWriter.h"
 #include "web/Pages.h"
 
 #include <algorithm>
@@ -60,6 +61,11 @@ void ProvisioningPortal::setOpenAfterFailingFor(uint32_t ms)
 void ProvisioningPortal::setCaptivePortal(bool enabled)
 {
     captivePortal_ = enabled;
+}
+
+void ProvisioningPortal::setMinSignal(int8_t dbm)
+{
+    minSignalDbm_ = dbm;
 }
 
 void ProvisioningPortal::begin()
@@ -250,6 +256,14 @@ void ProvisioningPortal::registerRoutes()
                  }
                  web::sendPortalPage(http_);
              });
+    http_.on(HttpMethod::Get, "/api/scan",
+             [this](const HttpRequest& request)
+             {
+                 if (accept(request))
+                 {
+                     sendScan(request);
+                 }
+             });
     // Every other address: the phones' connectivity checks and whatever the Owner typed.
     http_.onNotFound(
         [this](const HttpRequest& request)
@@ -286,6 +300,36 @@ bool ProvisioningPortal::accept(const HttpRequest& request)
     }
     lastActivityMs_ = clock_.nowMs();
     return true;
+}
+
+// The network list for the page. Answers at once with what the last scan found, and starts a
+// new scan when that is old, or when the page asks with refresh=1; "scanning" tells the page to
+// ask again.
+void ProvisioningPortal::sendScan(const HttpRequest& request)
+{
+    const bool refresh = request.arg("refresh").value_or("") == "1";
+    const bool old =
+        !scanner_.hasFinished() || clock_.nowMs() - scanner_.finishedAtMs() >= kScanMaxAgeMs;
+    if (!scanner_.busy() && (refresh || old))
+    {
+        scanner_.start();
+    }
+
+    JsonWriter json;
+    json.beginObject().key("scanning").boolean(scanner_.busy()).key("networks").beginArray();
+    for (const ScanResult& network : NetworkScanner::networkList(scanner_.results(), minSignalDbm_))
+    {
+        json.beginObject()
+            .key("ssid")
+            .string(network.ssid)
+            .key("rssi")
+            .number(network.rssi)
+            .key("secured")
+            .boolean(network.secured)
+            .endObject();
+    }
+    json.endArray().endObject();
+    http_.send(200, "application/json", json.str());
 }
 
 std::string ProvisioningPortal::pageUrl() const

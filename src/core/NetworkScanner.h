@@ -18,6 +18,8 @@ class NetworkScanner
 public:
     // A scan that hasn't finished by then counts as finished without results.
     static constexpr uint64_t kScanTimeoutMs = 15000;
+    // Networks weaker than this are left out of the list shown to the Owner.
+    static constexpr int8_t kDefaultMinSignalDbm = -90;
 
     NetworkScanner(WifiDriver& wifi, Clock& clock, Logger& log)
         : wifi_(wifi), clock_(clock), log_(log)
@@ -46,11 +48,22 @@ public:
         return results_;
     }
 
-    // When the last scan finished; 0 before the first.
+    // True once a scan has finished.
+    bool hasFinished() const
+    {
+        return hasFinished_;
+    }
+
+    // When the last scan finished.
     uint64_t finishedAtMs() const
     {
         return finishedAtMs_;
     }
+
+    // The scan results as the Owner should see them: hidden networks left out, each SSID once
+    // at its strongest signal, networks weaker than `minSignalDbm` dropped, strongest first.
+    static std::vector<ScanResult> networkList(const std::vector<ScanResult>& results,
+                                               int8_t minSignalDbm);
 
 private:
     WifiDriver& wifi_;
@@ -58,6 +71,7 @@ private:
     Logger& log_;
 
     bool busy_ = false;
+    bool hasFinished_ = false;
     uint64_t startedAtMs_ = 0;
     uint64_t finishedAtMs_ = 0;
     std::vector<ScanResult> results_;

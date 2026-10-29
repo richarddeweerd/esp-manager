@@ -1,5 +1,19 @@
 {
   "title": "Wi-Fi setup",
-  "welcomeTitle": "Set up Wi-Fi",
-  "welcomeLead": "Connect this device to your Wi-Fi network."
+  "chooseNetwork": "Choose your Wi-Fi network",
+  "chooseLead": "Pick the network this device should join.",
+  "scanning": "Looking for networks…",
+  "noNetworks": "No networks found.",
+  "scanAgain": "Look again",
+  "otherNetwork": "Other network…",
+  "secured": "Password protected",
+  "open": "open",
+  "hiddenLead": "Enter the name of a hidden network and its password.",
+  "passwordLead": "Enter the Wi-Fi password.",
+  "openLead": "This network is open; no password is needed.",
+  "networkName": "Network name",
+  "password": "Password",
+  "showPassword": "Show password",
+  "connect": "Connect",
+  "back": "Back"
 }

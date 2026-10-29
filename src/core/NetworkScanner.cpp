@@ -1,5 +1,7 @@
 #include "core/NetworkScanner.h"
 
+#include <algorithm>
+
 namespace espmgr
 {
 
@@ -40,7 +42,34 @@ void NetworkScanner::process()
         return;
     }
     busy_ = false;
+    hasFinished_ = true;
     finishedAtMs_ = clock_.nowMs();
+}
+
+std::vector<ScanResult> NetworkScanner::networkList(const std::vector<ScanResult>& results,
+                                                    int8_t minSignalDbm)
+{
+    std::vector<ScanResult> list;
+    for (const ScanResult& result : results)
+    {
+        if (result.ssid.empty() || result.rssi < minSignalDbm)
+        {
+            continue;
+        }
+        auto same = std::find_if(list.begin(), list.end(), [&result](const ScanResult& listed)
+                                 { return listed.ssid == result.ssid; });
+        if (same == list.end())
+        {
+            list.push_back(result);
+        }
+        else if (result.rssi > same->rssi)
+        {
+            *same = result;
+        }
+    }
+    std::stable_sort(list.begin(), list.end(),
+                     [](const ScanResult& a, const ScanResult& b) { return a.rssi > b.rssi; });
+    return list;
 }
 
 }  // namespace espmgr

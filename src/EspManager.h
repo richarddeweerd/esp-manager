@@ -14,6 +14,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace espmgr
 {
@@ -81,6 +82,15 @@ public:
     PortalState portalState() const;
     // The Provisioning Portal's settings, for example `esp.portal().setPassword("12345678");`.
     ProvisioningPortal& portal();
+
+    // Scans for networks without blocking: startScan() returns at once (false if no scan could
+    // be started), scanComplete() turns true when it's done, and scanResults() then lists what
+    // was found, cleaned up as in the Provisioning Portal: hidden networks left out, each SSID
+    // once at its strongest, networks below esp.portal().setMinSignal() dropped, strongest
+    // first. The device's own connection attempts share these scans.
+    bool startScan();
+    bool scanComplete() const;
+    std::vector<ScanResult> scanResults() const;
 
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
