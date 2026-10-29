@@ -1,16 +1,17 @@
 #include "EspManager.h"
 
-#include "core/Platform.h"
-
 #include <utility>
 
 namespace espmgr
 {
 
 // The default constructor is in platform/esp32/Esp32Platform.cpp.
-EspManager::EspManager(Platform& platform)
-    : platform_(platform), log_(platform.log, platform.clock), store_(platform.storage, log_),
-      connection_(platform.wifi, platform.clock, networks_, events_, log_)
+EspManager::EspManager(Platform& platform) : EspManager(nullptr, platform)
+{
+}
+
+EspManager::EspManager(std::shared_ptr<Esp32Platform> owned, Platform& platform)
+    : ownedPlatform_(std::move(owned)), platform_(platform)
 {
 }
 
@@ -23,12 +24,16 @@ void EspManager::begin()
     log_.info("core", "hostname %s", hostname().c_str());
     begun_ = true;
     connection_.begin();
+    portal_.begin();
 }
 
 void EspManager::process()
 {
-    // The parts do their work first; listeners then see the result.
+    // The parts do their work first; listeners then see the result. The scanner goes first, so
+    // the others see a scan that has just finished.
+    scanner_.process();
     connection_.process();
+    portal_.process();
     events_.deliver();
 }
 
@@ -105,6 +110,26 @@ bool EspManager::setNamePrefix(const std::string& prefix)
         platform_.wifi.setHostname(hostname());
     }
     return true;
+}
+
+void EspManager::startPortal()
+{
+    portal_.start();
+}
+
+void EspManager::stopPortal()
+{
+    portal_.stop();
+}
+
+PortalState EspManager::portalState() const
+{
+    return portal_.state();
+}
+
+ProvisioningPortal& EspManager::portal()
+{
+    return portal_;
 }
 
 SavedNetworks& EspManager::networks()

@@ -7,11 +7,11 @@ namespace espmgr
 
 // Lives here rather than in EspManager.cpp, so the native tests, which don't compile this
 // folder, can only construct an EspManager with fakes.
-EspManager::EspManager()
-    : ownedPlatform_(std::make_shared<Esp32Platform>()),
-      platform_(static_cast<Esp32Platform*>(ownedPlatform_.get())->platform()),
-      log_(platform_.log, platform_.clock), store_(platform_.storage, log_),
-      connection_(platform_.wifi, platform_.clock, networks_, events_, log_)
+EspManager::EspManager() : EspManager(std::make_shared<Esp32Platform>())
+{
+}
+
+EspManager::EspManager(std::shared_ptr<Esp32Platform> owned) : EspManager(owned, owned->platform())
 {
 }
 

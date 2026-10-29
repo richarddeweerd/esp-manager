@@ -112,6 +112,7 @@ public:
         request.path = path;
         request.args = std::move(args);
         request.headers = std::move(headers);
+        request.localIp = localIp;
 
         for (const Route& route : routes_)
         {
@@ -129,6 +130,8 @@ public:
     }
 
     bool authorized = false;
+    // The address requests arrive on; the access point's by default.
+    Ipv4Address localIp{192, 168, 4, 1};
 
     // --- Recorded for the test ---
 

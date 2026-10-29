@@ -243,6 +243,12 @@ uint8_t Esp32WifiDriver::accessPointClientCount() const
     return accessPointActive_ ? WiFi.softAPgetStationNum() : 0;
 }
 
+Ipv4Address Esp32WifiDriver::accessPointIp() const
+{
+    const IPAddress ip = WiFi.softAPIP();
+    return Ipv4Address(ip[0], ip[1], ip[2], ip[3]);
+}
+
 uint8_t Esp32WifiDriver::channel() const
 {
     return static_cast<uint8_t>(WiFi.channel());

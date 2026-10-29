@@ -28,6 +28,7 @@ public:
                           uint8_t channel) override;
     void stopAccessPoint() override;
     uint8_t accessPointClientCount() const override;
+    Ipv4Address accessPointIp() const override;
     uint8_t channel() const override;
 
     void setHostname(const std::string& hostname) override;

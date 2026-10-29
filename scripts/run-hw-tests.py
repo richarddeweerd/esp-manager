@@ -120,6 +120,21 @@ def http_checks(ip):
     return "ok"
 
 
+def portal_checks(ip):
+    """Runs the host side of test_portal_refuses_requests_from_the_test_network: the
+    Provisioning Portal only answers on its own access point. Returns "ok" or what failed."""
+    for path in ("/", "/hotspot-detect.html"):
+        try:
+            with urllib.request.urlopen(f"http://{ip}{path}", timeout=5) as response:
+                return f"{path} answered {response.status} on the test network"
+        except urllib.error.HTTPError as error:
+            if error.code != 403:
+                return f"{path} answered {error.code}, not 403"
+        except (OSError, urllib.error.URLError) as error:
+            return f"{path} failed: {error}"
+    return "ok"
+
+
 def run(conn, ssid, password, timeout_s):
     """Talks to the board until Unity prints its summary. Returns (results, summary)."""
     results = []
@@ -153,6 +168,10 @@ def run(conn, ssid, password, timeout_s):
                 outcome = http_checks(line.split(" ", 2)[2])
                 print(f"==> HTTP checks: {outcome}", flush=True)
                 conn.write(f"HTTP DONE {outcome}\n".encode())
+            elif line.startswith("ESPMGR-HW PORTAL "):
+                outcome = portal_checks(line.split(" ", 2)[2])
+                print(f"==> Portal checks: {outcome}", flush=True)
+                conn.write(f"PORTAL DONE {outcome}\n".encode())
             elif (match := RESULT.match(line)):
                 results.append(match.groupdict())
             elif (match := SUMMARY.match(line)):

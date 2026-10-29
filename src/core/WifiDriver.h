@@ -95,6 +95,8 @@ public:
                                   uint8_t channel) = 0;
     virtual void stopAccessPoint() = 0;
     virtual uint8_t accessPointClientCount() const = 0;
+    // The access point's own address, which its clients reach the device on.
+    virtual Ipv4Address accessPointIp() const = 0;
     // The radio's current channel, shared by station and access point.
     virtual uint8_t channel() const = 0;
 

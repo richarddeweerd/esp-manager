@@ -89,6 +89,11 @@ public:
         return clientCount;
     }
 
+    Ipv4Address accessPointIp() const override
+    {
+        return accessPointActive ? apIp : Ipv4Address();
+    }
+
     uint8_t channel() const override
     {
         return channel_;
@@ -158,6 +163,7 @@ public:
     bool accessPointStartSucceeds = true;
     uint8_t clientCount = 0;
     Ipv4Address ip{192, 168, 1, 50};
+    Ipv4Address apIp{192, 168, 4, 1};
     int8_t connectedRssi = -55;
     MacAddress mac{0x24, 0x6f, 0x28, 0xab, 0xcd, 0xef};
 

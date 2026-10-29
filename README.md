@@ -63,6 +63,16 @@ esp.networks().save(office);
 
 The connection state is `Idle` (no Saved Network), `Connecting`, `Connected` or `Waiting` (to try again after a failure or a lost connection). Each attempt scans first and joins the best Saved Network in range. After a failure the device waits before trying again, 1 s at first and twice as long after each further failure, up to 5 minutes, with some randomness so devices don't all retry at once. `esp.setRetryDelays(minMs, maxMs)` changes those limits, and `esp.lastFailure()` tells why the last attempt failed (`espmgr::toString()` turns it into text such as "wrong password").
 
+Without a Saved Network, the device opens the Provisioning Portal: an access point named after the device (`esp-abcdef`), open by default. `esp.startPortal()` opens it at any other time, for example from your own button code, and `esp.stopPortal()` closes it; `esp.portalState()` is `Off` or `Active`. The pages only answer on that access point, never on the network the device is connected to. It closes after 10 minutes without a request, and opens again while there's still no Saved Network. The settings are on `esp.portal()`:
+
+```cpp
+esp.portal().setPassword("setup-password");   // WPA2 instead of open; 8 to 63 characters
+esp.portal().setSsid("Lamp setup");           // instead of the device name
+esp.portal().setTimeout(5 * 60 * 1000);       // 0 keeps it open
+esp.portal().setRestartOnTimeout(false);      // stay closed after a timeout
+esp.portal().setOpenAfterFailingFor(15 * 60 * 1000);  // also open when not connected for 15 min
+```
+
 The library is silent by default. To see what it does, start `Serial` and pick a log level (`Error`, `Warn`, `Info`, `Debug` or `Verbose`):
 
 ```cpp
