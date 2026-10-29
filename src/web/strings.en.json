@@ -15,5 +15,40 @@
   "password": "Password",
   "showPassword": "Show password",
   "connect": "Connect",
-  "back": "Back"
+  "back": "Back",
+  "connecting": "Connecting to",
+  "connectingLead": "This takes up to 20 seconds.",
+  "channelWarning": "Your phone may lose its connection to this device for a moment. Stay on this page: it reconnects and shows the result.",
+  "failedTitle": "Couldn't connect",
+  "tryAgain": "Try again",
+  "saveAnyway": "Save anyway",
+  "saveAnywayHint": "Use this if the network is out of range right now. The device keeps trying to connect.",
+  "doneTitle": "Connected",
+  "doneLead": "The device is now on your network. You can close this page and reconnect your phone to your usual Wi-Fi.",
+  "savedTitle": "Saved",
+  "savedLead": "The device keeps trying to connect to this network. You can close this page and reconnect your phone to your usual Wi-Fi.",
+  "lostTitle": "No answer from the device",
+  "lostLead": "Connect your phone to the device's Wi-Fi network again and reload this page. If the device connected to your network, its own Wi-Fi network is gone and setup is done.",
+  "reload": "Reload",
+  "wifi": "Wi-Fi",
+  "ipAddress": "IP address",
+  "reasons": {
+    "wrong-password": "The password is wrong. Check it and try again.",
+    "network-not-found": "The network wasn't found. Check its name, and that it's in range.",
+    "timeout": "The network didn't answer in time.",
+    "connection-lost": "The connection dropped straight away.",
+    "other": "Something went wrong while connecting."
+  },
+  "errors": {
+    "ssid-empty": "Enter the network's name.",
+    "ssid-too-long": "A network name is at most 32 bytes.",
+    "password-too-short": "A Wi-Fi password has at least 8 characters.",
+    "password-too-long": "A Wi-Fi password has at most 63 characters, or 64 hex digits.",
+    "password-invalid": "The password may only use letters, digits, spaces and the usual symbols; 64 characters must be hex digits.",
+    "busy": "The device is still testing the previous network.",
+    "done": "The device is already set up.",
+    "not-saved": "The device couldn't save the network.",
+    "unreachable": "Couldn't reach the device. Make sure your phone is still on its Wi-Fi network.",
+    "other": "Something went wrong."
+  }
 }

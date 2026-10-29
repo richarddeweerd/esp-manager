@@ -93,5 +93,6 @@ button, input { font: inherit; color: inherit; }
 .center { display: grid; justify-items: center; text-align: center; gap: 14px; padding: 32px 0; }
 .bigicon { font-size: 56px; line-height: 1; }
 .foot { padding-top: 16px; display: grid; gap: 8px; }
+.center-text { text-align: center; font-size: 13px; margin: 0; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: var(--space); box-shadow: var(--shadow); margin-bottom: 12px; }

@@ -49,6 +49,10 @@ void WifiConnection::process()
             log_.info("wifi", "connected to %s as %s, channel %u", ssid_.c_str(),
                       info.ip.toString().c_str(), static_cast<unsigned>(info.channel));
             failuresInARow_ = 0;
+            if (trial_ == Trial::Running)
+            {
+                trial_ = Trial::Connected;
+            }
             setState(ConnectionState::Connected);
             events_.raiseConnected(info);
         }
@@ -151,6 +155,20 @@ SavedNetwork WifiConnection::choose(const std::vector<SavedNetwork>& networks,
                              { return a.priority < b.priority; });
 }
 
+void WifiConnection::tryNetwork(const SavedNetwork& network)
+{
+    if (state_ == ConnectionState::Connecting || state_ == ConnectionState::Connected)
+    {
+        wifi_.disconnect();
+    }
+    scanning_ = false;
+    trial_ = Trial::Running;
+    trialFailure_ = FailureReason::None;
+    attemptStartedMs_ = clock_.nowMs();
+    setState(ConnectionState::Connecting);
+    connectTo(network);
+}
+
 void WifiConnection::startAttempt()
 {
     attemptStartedMs_ = clock_.nowMs();
@@ -181,6 +199,17 @@ void WifiConnection::connectTo(const SavedNetwork& network)
 void WifiConnection::attemptFailed(FailureReason reason)
 {
     lastFailure_ = reason;
+    if (trial_ == Trial::Running)
+    {
+        // Not a Saved Network, so it isn't a failure in a row: carry on with the Saved Networks
+        // after the shortest wait.
+        trial_ = Trial::Failed;
+        trialFailure_ = reason;
+        log_.warn("wifi", "could not connect to %s (%s)", ssid_.c_str(), toString(reason));
+        retryAtMs_ = clock_.nowMs() + minRetryDelayMs_;
+        setState(networks_.count() > 0 ? ConnectionState::Waiting : ConnectionState::Idle);
+        return;
+    }
     scheduleRetry();
     log_.warn("wifi", "could not connect to %s (%s), retrying in %u ms", ssid_.c_str(),
               toString(reason), static_cast<unsigned>(retryAtMs_ - clock_.nowMs()));

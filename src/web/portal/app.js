@@ -18,7 +18,12 @@ const S = {
   password: "",
   showPassword: false,
   error: "",
+  reason: "",
+  ip: "",
 };
+
+// How long the page keeps asking for the result while the phone may be off the access point.
+const RESULT_TIMEOUT_MS = 90000;
 
 // --- Talking to the device ---
 
@@ -26,6 +31,11 @@ async function getJson(path) {
   const response = await fetch(path, { cache: "no-store" });
   if (!response.ok) throw new Error(`${path}: ${response.status}`);
   return response.json();
+}
+
+async function postForm(path, fields) {
+  const response = await fetch(path, { method: "POST", body: new URLSearchParams(fields) });
+  return { ok: response.ok, data: await response.json() };
 }
 
 // Asks for the network list until the device's scan has finished.
@@ -43,6 +53,55 @@ async function loadNetworks(refresh) {
   }
   if (S.screen === "networks") render();
   if (S.scanning) scanTimer = setTimeout(() => loadNetworks(false), 1500);
+}
+
+// Sends the network, then follows the test until the device has a result. Testing can move the
+// access point to the router's channel, so the phone may drop off for a while; requests that
+// fail meanwhile are retried until RESULT_TIMEOUT_MS.
+async function submit(saveAnyway) {
+  const fields = { ssid: S.ssid, password: S.secured || S.hidden ? S.password : "" };
+  if (saveAnyway) fields.saveAnyway = "1";
+  let answer;
+  try {
+    answer = await postForm("/api/connect", fields);
+  } catch (error) {
+    S.error = STRINGS.errors.unreachable;
+    go("password");
+    return;
+  }
+  if (!answer.ok) {
+    S.error = STRINGS.errors[answer.data.error] || STRINGS.errors.other;
+    go("password");
+    return;
+  }
+  showResult(answer.data);
+  const deadline = Date.now() + RESULT_TIMEOUT_MS;
+  while (S.screen === "connecting") {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (Date.now() > deadline) {
+      go("lost");
+      return;
+    }
+    try {
+      showResult(await getJson("/api/result"));
+    } catch (error) {
+      // Still off the access point; ask again.
+    }
+  }
+}
+
+function showResult(result) {
+  if (result.state === "testing") {
+    if (S.screen !== "connecting") go("connecting");
+  } else if (result.state === "connected") {
+    S.ip = result.ip;
+    go("done");
+  } else if (result.state === "saved") {
+    go("saved");
+  } else if (result.state === "failed") {
+    S.reason = result.reason;
+    go("failed");
+  }
 }
 
 // --- Screens ---
@@ -90,6 +149,40 @@ const screens = {
       <div class="foot"><button class="btn block" data-act="connect">${esc(STRINGS.connect)}</button>
         <button class="btn link" data-act="back">← ${esc(STRINGS.back)}</button></div>`];
   },
+
+  connecting() {
+    return [3, `<div class="center"><div class="spinner"></div>
+      <h2>${esc(STRINGS.connecting)}<br>${esc(S.ssid)}</h2>
+      <p class="lead">${esc(STRINGS.connectingLead)}</p></div>
+      <div class="note">${esc(STRINGS.channelWarning)}</div>`];
+  },
+
+  failed() {
+    return [3, `<div class="center"><div class="bigicon bad">✕</div>
+      <h2>${esc(STRINGS.failedTitle)}</h2>
+      <p class="lead">${esc(STRINGS.reasons[S.reason] || STRINGS.reasons.other)}</p></div>
+      <div class="foot"><button class="btn block" data-act="retry">${esc(STRINGS.tryAgain)}</button>
+        <button class="btn secondary block" data-act="saveAnyway">${esc(STRINGS.saveAnyway)}</button>
+        <p class="muted center-text">${esc(STRINGS.saveAnywayHint)}</p></div>`];
+  },
+
+  done() {
+    return [4, `<div class="center"><div class="bigicon ok">✓</div>
+      <h2>${esc(STRINGS.doneTitle)}</h2><p class="lead">${esc(STRINGS.doneLead)}</p></div>
+      <div class="panel"><dl class="kv"><dt>${esc(STRINGS.wifi)}</dt><dd>${esc(S.ssid)}</dd>
+        <dt>${esc(STRINGS.ipAddress)}</dt><dd>${esc(S.ip)}</dd></dl></div>`];
+  },
+
+  saved() {
+    return [4, `<div class="center"><div class="bigicon ok">✓</div>
+      <h2>${esc(STRINGS.savedTitle)}</h2><p class="lead">${esc(STRINGS.savedLead)}</p></div>`];
+  },
+
+  lost() {
+    return [3, `<div class="center"><div class="bigicon">?</div>
+      <h2>${esc(STRINGS.lostTitle)}</h2><p class="lead">${esc(STRINGS.lostLead)}</p></div>
+      <div class="foot"><button class="btn block" data-act="reload">${esc(STRINGS.reload)}</button></div>`];
+  },
 };
 
 // Shows the current screen; its step (1 to 4) lights up the step indicator.
@@ -136,15 +229,47 @@ const actions = {
   },
   connect() {
     readFields();
+    S.error = check();
+    if (S.error) {
+      go("password");
+      return;
+    }
+    submit(false);
+  },
+  retry() {
+    S.error = "";
+    go("password");
+  },
+  saveAnyway() {
+    submit(true);
+  },
+  reload() {
+    location.reload();
   },
 };
+
+// The checks the device makes too, so most mistakes show without a round trip.
+function check() {
+  if (!S.ssid) return STRINGS.errors["ssid-empty"];
+  if (new TextEncoder().encode(S.ssid).length > 32) return STRINGS.errors["ssid-too-long"];
+  if (!S.secured && !S.hidden) return "";
+  const password = S.password;
+  if (password === "") return S.hidden ? "" : STRINGS.errors["password-too-short"];
+  if (password.length < 8) return STRINGS.errors["password-too-short"];
+  if (password.length > 64) return STRINGS.errors["password-too-long"];
+  if (!/^[\x20-\x7e]*$/.test(password)) return STRINGS.errors["password-invalid"];
+  if (password.length === 64 && !/^[0-9a-fA-F]+$/.test(password)) return STRINGS.errors["password-invalid"];
+  return "";
+}
 
 app.addEventListener("click", (event) => {
   const pick = event.target.closest("[data-pick]");
   if (pick) {
     const network = S.networks[Number(pick.dataset.pick)];
     Object.assign(S, { ssid: network.ssid, secured: network.secured, hidden: false, password: "", error: "" });
-    go("password");
+    // An open network has nothing to enter.
+    if (network.secured) go("password");
+    else submit(false);
     return;
   }
   const action = event.target.closest("[data-act]");

@@ -25,9 +25,21 @@ namespace espmgr
 // Each attempt scans first and joins the best reachable Saved Network. Waiting lasts longer
 // after each failure in a row (exponential backoff with random variation), and goes back to
 // Idle once there's no Saved Network.
+//
+// A trial (tryNetwork()) is one attempt at a network that isn't saved, for the Provisioning
+// Portal to test what the Owner entered. It goes through the same states; afterwards the
+// connection carries on with the Saved Networks.
 class WifiConnection
 {
 public:
+    enum class Trial
+    {
+        None,
+        Running,
+        Connected,
+        Failed,
+    };
+
     // How long one attempt, scan included, may take before it counts as failed.
     static constexpr uint64_t kAttemptTimeoutMs = 20000;
     static constexpr uint32_t kDefaultMinRetryDelayMs = 1000;
@@ -68,6 +80,30 @@ public:
         return lastFailure_;
     }
 
+    // Stops what the connection is doing and makes one attempt at `network`, without a scan and
+    // without saving it. trial() tells how it went.
+    void tryNetwork(const SavedNetwork& network);
+
+    Trial trial() const
+    {
+        return trial_;
+    }
+
+    // Why the trial failed.
+    FailureReason trialFailure() const
+    {
+        return trialFailure_;
+    }
+
+    // Forgets a finished trial's outcome.
+    void endTrial()
+    {
+        if (trial_ != Trial::Running)
+        {
+            trial_ = Trial::None;
+        }
+    }
+
     // The wait after the first failure, doubling after each further one up to `maxMs`. Returns
     // false, changing nothing, unless 0 < minMs <= maxMs.
     bool setRetryDelays(uint32_t minMs, uint32_t maxMs);
@@ -106,6 +142,8 @@ private:
     uint32_t failuresInARow_ = 0;
     uint32_t minRetryDelayMs_ = kDefaultMinRetryDelayMs;
     uint32_t maxRetryDelayMs_ = kDefaultMaxRetryDelayMs;
+    Trial trial_ = Trial::None;
+    FailureReason trialFailure_ = FailureReason::None;
 };
 
 }  // namespace espmgr
