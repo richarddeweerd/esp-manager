@@ -1,5 +1,6 @@
 #include "EspManager.h"
 
+#include <cstdio>
 #include <utility>
 
 namespace espmgr
@@ -59,6 +60,39 @@ bool EspManager::waitForConnection(uint32_t timeoutMs)
 void EspManager::setLogLevel(LogLevel level)
 {
     log_.setLevel(level);
+}
+
+DeviceStatus EspManager::status() const
+{
+    WifiDriver& wifi = platform_.wifi;
+    DeviceStatus status;
+    status.connection = connection_.state();
+    status.portal = portal_.state();
+    status.ssid = connection_.ssid();
+    if (status.connection == ConnectionState::Connected)
+    {
+        status.ip = wifi.localIp();
+        status.gateway = wifi.gatewayIp();
+        status.rssi = wifi.rssi();
+        status.channel = wifi.channel();
+    }
+    status.hostname = hostname();
+    const MacAddress mac = wifi.macAddress();
+    char text[18];
+    std::snprintf(text, sizeof(text), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2],
+                  mac[3], mac[4], mac[5]);
+    status.mac = text;
+    status.uptimeMs = platform_.clock.nowMs();
+    status.freeHeap = platform_.system.freeHeap();
+    status.chip = platform_.system.chipModel();
+    status.firmwareVersion = firmwareVersion_;
+    status.libraryVersion = ESPMGR_VERSION;
+    return status;
+}
+
+void EspManager::setFirmwareVersion(const std::string& version)
+{
+    firmwareVersion_ = version;
 }
 
 ConnectionState EspManager::state() const

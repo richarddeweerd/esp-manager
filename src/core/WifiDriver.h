@@ -108,6 +108,7 @@ public:
     virtual void useStaticIp(const StaticIpConfig& config) = 0;
 
     virtual Ipv4Address localIp() const = 0;
+    virtual Ipv4Address gatewayIp() const = 0;
     virtual int8_t rssi() const = 0;
     virtual MacAddress macAddress() const = 0;
 };

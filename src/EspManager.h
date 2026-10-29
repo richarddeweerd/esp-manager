@@ -2,6 +2,7 @@
 
 #include "EspManagerVersion.h"
 #include "core/DeviceName.h"
+#include "core/DeviceStatus.h"
 #include "core/Events.h"
 #include "core/Logger.h"
 #include "core/NetworkScanner.h"
@@ -48,6 +49,13 @@ public:
     // How much the library prints to Serial; off by default. For example
     // `esp.setLogLevel(espmgr::LogLevel::Debug);`. Call Serial.begin() first.
     void setLogLevel(LogLevel level);
+
+    // Everything the status pages show: connection, SSID, IP address, signal, hostname, MAC,
+    // uptime, free heap, chip and versions (US11.2.4). Never a password.
+    DeviceStatus status() const;
+
+    // Your sketch's version, shown on the status pages, such as "1.4.2". Empty by default.
+    void setFirmwareVersion(const std::string& version);
 
     // Where the Wi-Fi connection stands: Idle, Connecting, Connected or Waiting (to retry).
     ConnectionState state() const;
@@ -136,11 +144,19 @@ private:
     SavedNetworks networks_{store_, log_};
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
-    ProvisioningPortal portal_{platform_.wifi, platform_.http, platform_.clock,
-                               scanner_,       networks_,      connection_,
-                               events_,        log_,           [this] { return hostname(); }};
+    ProvisioningPortal portal_{platform_.wifi,
+                               platform_.http,
+                               platform_.clock,
+                               scanner_,
+                               networks_,
+                               connection_,
+                               events_,
+                               log_,
+                               [this] { return hostname(); },
+                               [this] { return status(); }};
     std::string namePrefix_ = kDefaultNamePrefix;
     std::string hostname_;  // empty: the default name
+    std::string firmwareVersion_;
     bool begun_ = false;
 };
 

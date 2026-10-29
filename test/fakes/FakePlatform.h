@@ -4,6 +4,7 @@
 #include "FakeHttpServer.h"
 #include "FakeLogSink.h"
 #include "FakeStorage.h"
+#include "FakeSystem.h"
 #include "FakeWifiDriver.h"
 #include "core/Platform.h"
 
@@ -18,7 +19,8 @@ struct FakePlatform
     FakeClock clock;
     FakeHttpServer http;
     FakeLogSink log;
-    Platform platform{wifi, storage, clock, http, log};
+    FakeSystem system;
+    Platform platform{wifi, storage, clock, http, log, system};
 };
 
 }  // namespace espmgr

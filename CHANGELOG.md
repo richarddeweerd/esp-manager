@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- Device status: `esp.status()` (connection state, SSID, IP address, gateway, signal, channel, hostname, MAC, uptime, free heap, chip, firmware and library version) and `esp.setFirmwareVersion()`; `GET /api/status` and a Status screen in the Provisioning Portal. A new `System` hardware interface reports the heap and chip (#16).
 - Test-then-save: the network the Owner enters in the Provisioning Portal is tried while the access point stays up and saved only if it connects, or straight away with "Save anyway". The page shows the progress, the reason for a failure and a warning that the phone may drop off for a moment, and keeps asking for the result until the phone is back. `onProvisioningCompleted` reports the saved network and the portal closes 30 s later (#15).
 - Network list: the Provisioning Portal's page lists the networks in range from a non-blocking scan, each SSID once at its strongest, hidden and weak networks (below -90 dBm, `esp.portal().setMinSignal()`) left out, plus "Other network…" for a hidden one. `esp.startScan()`, `esp.scanComplete()` and `esp.scanResults()` give sketches the same list (#14).
 - Captive portal: while the Provisioning Portal is open, a DNS server answers every name with the access point's address and every other address redirects to the setup page, so phones open it by themselves; `esp.portal().setCaptivePortal(false)` turns it off (#13).

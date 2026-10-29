@@ -3,7 +3,8 @@
 // process() (#7, #9), the default hostname and a static-IP Saved Network (#10), and the
 // Provisioning Portal opened next to the connection (#12). The rig can't join the portal's
 // access point, so it checks from the test network that the portal refuses it there and that the
-// captive DNS server answers every name with the access point's address (#13).
+// captive DNS server answers every name with the access point's address (#13), and the status
+// against what the Wi-Fi library and the chip report (#16).
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
 // The test network stays saved on the board afterwards, as it would after setup.
@@ -150,6 +151,29 @@ void test_back_to_dhcp_gets_a_leased_address()
     TEST_ASSERT_EQUAL_UINT8(42, connected.ip[1]);
 }
 
+void test_status_matches_the_hardware()
+{
+    HOSTLINK_REQUIRE_NETWORK();
+    esp.setFirmwareVersion("hw-test");
+    const espmgr::DeviceStatus status = esp.status();
+    TEST_ASSERT_EQUAL_STRING("Connected", name(status.connection));
+    TEST_ASSERT_EQUAL_STRING(hostlink::testSsid.c_str(), status.ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING(WiFi.localIP().toString().c_str(), status.ip.toString().c_str());
+    TEST_ASSERT_EQUAL_STRING(WiFi.gatewayIP().toString().c_str(),
+                             status.gateway.toString().c_str());
+    TEST_ASSERT_INT_WITHIN(15, WiFi.RSSI(), status.rssi);
+    TEST_ASSERT_EQUAL_UINT8(WiFi.channel(), status.channel);
+    String mac = WiFi.macAddress();
+    mac.toLowerCase();
+    TEST_ASSERT_EQUAL_STRING(mac.c_str(), status.mac.c_str());
+    TEST_ASSERT_UINT32_WITHIN(1000, millis(), static_cast<uint32_t>(status.uptimeMs));
+    TEST_ASSERT_UINT32_WITHIN(20000, ESP.getFreeHeap(), status.freeHeap);
+    TEST_ASSERT_EQUAL_STRING(ESP.getChipModel(),
+                             status.chip.substr(0, status.chip.find(" rev")).c_str());
+    TEST_ASSERT_EQUAL_STRING("hw-test", status.firmwareVersion.c_str());
+    TEST_ASSERT_EQUAL_STRING(ESPMGR_VERSION, status.libraryVersion.c_str());
+}
+
 // Calls process() until the portal is in `state`, for at most 10 s.
 bool waitForPortal(PortalState state)
 {
@@ -247,6 +271,7 @@ void setup()
     RUN_TEST(test_hostname_reaches_the_wifi_stack);
     RUN_TEST(test_static_ip_saved_network_gets_its_address);
     RUN_TEST(test_back_to_dhcp_gets_a_leased_address);
+    RUN_TEST(test_status_matches_the_hardware);
     RUN_TEST(test_portal_opens_next_to_the_connection_on_its_channel);
     RUN_TEST(test_portal_refuses_requests_from_the_test_network);
     RUN_TEST(test_stop_portal_closes_the_access_point);

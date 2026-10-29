@@ -1,11 +1,6 @@
 "use strict";
 
-// The page text, filled in from src/web/strings.en.json by scripts/build-web.py.
-const STRINGS = /*STRINGS*/ {};
-
 const app = document.getElementById("app");
-const esc = (text) => String(text).replace(/[&<>"']/g,
-  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // Where the wizard stands. The device keeps nothing for the page; a reload starts over.
 const S = {
@@ -20,23 +15,15 @@ const S = {
   error: "",
   reason: "",
   ip: "",
+  status: null,
+  // The screen the status screen goes back to.
+  before: "networks",
 };
 
 // How long the page keeps asking for the result while the phone may be off the access point.
 const RESULT_TIMEOUT_MS = 90000;
 
 // --- Talking to the device ---
-
-async function getJson(path) {
-  const response = await fetch(path, { cache: "no-store" });
-  if (!response.ok) throw new Error(`${path}: ${response.status}`);
-  return response.json();
-}
-
-async function postForm(path, fields) {
-  const response = await fetch(path, { method: "POST", body: new URLSearchParams(fields) });
-  return { ok: response.ok, data: await response.json() };
-}
 
 // Asks for the network list until the device's scan has finished.
 let scanTimer = 0;
@@ -106,12 +93,6 @@ function showResult(result) {
 
 // --- Screens ---
 
-function bars(rssi) {
-  const level = rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
-  return `<span class="bars" title="${rssi} dBm">${[1, 2, 3, 4].map((i) =>
-    `<i class="${i <= level ? "on" : ""}"></i>`).join("")}</span>`;
-}
-
 function lock(secured) {
   return secured ? `<span class="lock" title="${esc(STRINGS.secured)}">🔒</span>`
     : `<span class="lock muted">${esc(STRINGS.open)}</span>`;
@@ -178,6 +159,13 @@ const screens = {
       <h2>${esc(STRINGS.savedTitle)}</h2><p class="lead">${esc(STRINGS.savedLead)}</p></div>`];
   },
 
+  status() {
+    const body = S.status ? `<div class="panel">${statusList(S.status)}</div>`
+      : `<p class="muted">${esc(STRINGS.loading)}</p>`;
+    return [0, `<h2>${esc(STRINGS.status)}</h2>${body}
+      <div class="foot"><button class="btn link" data-act="closeStatus">← ${esc(STRINGS.back)}</button></div>`];
+  },
+
   lost() {
     return [3, `<div class="center"><div class="bigicon">?</div>
       <h2>${esc(STRINGS.lostTitle)}</h2><p class="lead">${esc(STRINGS.lostLead)}</p></div>
@@ -185,12 +173,15 @@ const screens = {
   },
 };
 
-// Shows the current screen; its step (1 to 4) lights up the step indicator.
+// Shows the current screen; its step (1 to 4) lights up the step indicator, 0 hides it.
 function render() {
   const [step, body] = screens[S.screen]();
-  const steps = `<div class="steps">${[1, 2, 3, 4].map((i) =>
-    `<i class="${i <= step ? "on" : ""}"></i>`).join("")}</div>`;
-  app.innerHTML = `<header><h1>${esc(STRINGS.title)}</h1></header>${steps}${body}`;
+  const steps = step ? `<div class="steps">${[1, 2, 3, 4].map((i) =>
+    `<i class="${i <= step ? "on" : ""}"></i>`).join("")}</div>` : "";
+  // The status is one tap away, except while a test runs.
+  const link = S.screen === "status" || S.screen === "connecting" ? ""
+    : `<button class="btn link" data-act="openStatus">${esc(STRINGS.status)}</button>`;
+  app.innerHTML = `<header><h1>${esc(STRINGS.title)}</h1>${link}</header>${steps}${body}`;
 }
 
 function go(screen) {
@@ -246,7 +237,29 @@ const actions = {
   reload() {
     location.reload();
   },
+  openStatus() {
+    readFields();
+    S.before = S.screen;
+    go("status");
+    loadStatus();
+  },
+  closeStatus() {
+    go(S.before);
+  },
 };
+
+// Keeps the status screen up to date while it's shown.
+async function loadStatus() {
+  while (S.screen === "status") {
+    try {
+      S.status = await getJson("/api/status");
+      if (S.screen === "status") render();
+    } catch (error) {
+      // Ask again.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+}
 
 // The checks the device makes too, so most mistakes show without a round trip.
 function check() {

@@ -4,6 +4,7 @@
 #include "core/HttpServer.h"
 #include "core/Logger.h"
 #include "core/Storage.h"
+#include "core/System.h"
 #include "core/WifiDriver.h"
 
 namespace espmgr
@@ -18,6 +19,7 @@ struct Platform
     Clock& clock;
     HttpServer& http;
     LogSink& log;
+    System& system;
 };
 
 }  // namespace espmgr

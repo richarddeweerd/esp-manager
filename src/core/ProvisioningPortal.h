@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Clock.h"
+#include "core/DeviceStatus.h"
 #include "core/Events.h"
 #include "core/HttpServer.h"
 #include "core/Logger.h"
@@ -49,12 +50,14 @@ public:
     // How long the portal stays open after provisioning, so the page can fetch the result.
     static constexpr uint64_t kCloseDelayMs = 30000;
 
-    // `deviceName` gives the access point's default SSID.
+    // `deviceName` gives the access point's default SSID, `status` what GET /api/status shows.
     ProvisioningPortal(WifiDriver& wifi, HttpServer& http, Clock& clock, NetworkScanner& scanner,
                        SavedNetworks& networks, WifiConnection& connection, Events& events,
-                       Logger& log, std::function<std::string()> deviceName)
+                       Logger& log, std::function<std::string()> deviceName,
+                       std::function<DeviceStatus()> status)
         : wifi_(wifi), http_(http), clock_(clock), scanner_(scanner), networks_(networks),
-          connection_(connection), events_(events), log_(log), deviceName_(std::move(deviceName))
+          connection_(connection), events_(events), log_(log), deviceName_(std::move(deviceName)),
+          status_(std::move(status))
     {
     }
 
@@ -168,6 +171,7 @@ private:
     Events& events_;
     Logger& log_;
     std::function<std::string()> deviceName_;
+    std::function<DeviceStatus()> status_;
 
     std::string ssid_;  // empty: the device name
     std::string password_;

@@ -311,6 +311,16 @@ void ProvisioningPortal::registerRoutes()
                      sendScan(request);
                  }
              });
+    http_.on(HttpMethod::Get, "/api/status",
+             [this](const HttpRequest& request)
+             {
+                 if (accept(request))
+                 {
+                     JsonWriter json;
+                     writeJson(json, status_());
+                     http_.send(200, "application/json", json.str());
+                 }
+             });
     http_.on(HttpMethod::Post, "/api/connect",
              [this](const HttpRequest& request)
              {

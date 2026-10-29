@@ -5,8 +5,9 @@ Usage:
     scripts/build-web.py           # rewrite src/web/generated/*.h
     scripts/build-web.py --check   # fail if a header doesn't match its sources (what CI runs)
 
-Each page in src/web/<page>/ becomes one HTML file: style.css and app.js are inlined, and the
-text from src/web/strings.en.json replaces the /*STRINGS*/ marker in app.js. The result is
+Each page in src/web/<page>/ becomes one HTML file: the stylesheets and scripts its index.html
+links to are inlined (shared ones live in src/web/common/), and the text from
+src/web/strings.en.json replaces the /*STRINGS*/ marker. The result is
 gzipped and written as a byte array to src/web/generated/<Name>Page.h, which is committed, so
 building the library never needs Python.
 
@@ -34,30 +35,33 @@ PAGES = [
 BYTE = re.compile(r"0x([0-9a-f]{2})")
 
 
+LINK = re.compile(r'<link rel="stylesheet" href="([^"]+)">')
+SCRIPT = re.compile(r'<script src="([^"]+)"></script>')
+
+
 def build_page(folder):
-    """Returns the page in src/web/<folder>/ as one HTML document."""
+    """Returns the page in src/web/<folder>/ as one HTML document. Every stylesheet and script
+    it links to (such as ../common/style.css) is inlined, in order."""
     source = WEB / folder
     html = (source / "index.html").read_text(encoding="utf-8")
-    css = (source / "style.css").read_text(encoding="utf-8")
-    js = (source / "app.js").read_text(encoding="utf-8")
     strings = json.loads(STRINGS.read_text(encoding="utf-8"))
-
-    if "/*STRINGS*/ {}" not in js:
-        sys.exit(f"{folder}/app.js has no '/*STRINGS*/ {{}}' marker")
     # "</" can't appear inside a <script>, so escape the slash in the text.
     text = json.dumps(strings, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    js = js.replace("/*STRINGS*/ {}", text)
 
-    # Comments are for the sources only.
+    def css(match):
+        code = (source / match.group(1)).read_text(encoding="utf-8")
+        # Comments are for the sources only.
+        return "<style>\n" + re.sub(r"/\*.*?\*/\n?", "", code, flags=re.S) + "</style>"
+
+    def script(match):
+        return "<script>\n" + (source / match.group(1)).read_text(encoding="utf-8") + "</script>"
+
     html = re.sub(r"<!--.*?-->\n?", "", html, flags=re.S)
-    css = re.sub(r"/\*.*?\*/\n?", "", css, flags=re.S)
-
-    for tag, inline in (('<link rel="stylesheet" href="style.css">', f"<style>\n{css}</style>"),
-                        ('<script src="app.js"></script>', f"<script>\n{js}</script>")):
-        if tag not in html:
-            sys.exit(f"{folder}/index.html has no {tag}")
-        html = html.replace(tag, inline)
-    return html
+    html = LINK.sub(css, html)
+    html = SCRIPT.sub(script, html)
+    if "/*STRINGS*/ {}" not in html:
+        sys.exit(f"{folder} has no '/*STRINGS*/ {{}}' marker in its scripts")
+    return html.replace("/*STRINGS*/ {}", text)
 
 
 def header(folder, name, data):

@@ -7,7 +7,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-pattern='^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"](Arduino|WiFi|WebServer|DNSServer|Preferences|esp_[A-Za-z0-9_]*)\.h[>"]'
+pattern='^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"](Arduino|Esp|WiFi|WebServer|DNSServer|Preferences|esp_[A-Za-z0-9_]*)\.h[>"]'
 
 if grep -rnE --include='*.h' --include='*.cpp' "$pattern" src test --exclude-dir=platform \
     --exclude-dir='test_hw_*' --exclude-dir=hw; then
