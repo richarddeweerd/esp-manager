@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `scripts/check-includes.sh`, which keeps Arduino and ESP-IDF headers inside `src/platform/`.
 - Internal logging with the levels `Error`, `Warn`, `Info`, `Debug` and `Verbose`, off by default; `esp.setLogLevel()` turns it on and prints to `Serial` (#4).
 - `SavedNetwork` (SSID, password, priority, DHCP or static IP) with validation, and `SavedNetworkStore`, which keeps the list as one versioned record in NVS. A damaged record, or one from newer firmware, reads as no Saved Networks and is left in place (#6).
+- Hostname: defaults to `esp-<last 6 hex digits of the MAC>`; `esp.setHostname()` and `esp.setNamePrefix()` change it, `esp.hostname()` returns it. DHCP by default, static addressing per Saved Network (#10).
 - `esp.waitForConnection(timeoutMs)`: an opt-in wait for the connection that keeps calling `process()` (#9).
 - Reconnecting with exponential backoff (1 s up to 5 min, random variation, `esp.setRetryDelays()`); each attempt scans and joins the best reachable Saved Network; `esp.lastFailure()` and `espmgr::toString(FailureReason)` (#8).
 - Connecting: `begin()` loads the Saved Network and `process()` connects to it, retries after a failed attempt (20 s timeout) and reconnects after a lost connection. `esp.state()` returns `Idle`, `Connecting`, `Connected` or `Waiting`; `esp.networks()` saves, lists and clears the Saved Network (one for now) (#7).

@@ -18,6 +18,10 @@ void EspManager::begin()
 {
     log_.info("core", "EspManager %s starting", ESPMGR_VERSION);
     networks_.load();
+    // Before anything starts the station interface, which takes the hostname with it.
+    platform_.wifi.setHostname(hostname());
+    log_.info("core", "hostname %s", hostname().c_str());
+    begun_ = true;
     connection_.begin();
 }
 
@@ -65,6 +69,42 @@ FailureReason EspManager::lastFailure() const
 bool EspManager::setRetryDelays(uint32_t minMs, uint32_t maxMs)
 {
     return connection_.setRetryDelays(minMs, maxMs);
+}
+
+std::string EspManager::hostname() const
+{
+    return hostname_.empty() ? defaultDeviceName(namePrefix_, platform_.wifi.macAddress())
+                             : hostname_;
+}
+
+bool EspManager::setHostname(const std::string& hostname)
+{
+    if (!isValidHostname(hostname))
+    {
+        log_.warn("core", "ignoring invalid hostname \"%s\"", hostname.c_str());
+        return false;
+    }
+    hostname_ = hostname;
+    if (begun_)
+    {
+        platform_.wifi.setHostname(this->hostname());
+    }
+    return true;
+}
+
+bool EspManager::setNamePrefix(const std::string& prefix)
+{
+    if (!isValidNamePrefix(prefix))
+    {
+        log_.warn("core", "ignoring invalid name prefix \"%s\"", prefix.c_str());
+        return false;
+    }
+    namePrefix_ = prefix;
+    if (begun_)
+    {
+        platform_.wifi.setHostname(hostname());
+    }
+    return true;
 }
 
 SavedNetworks& EspManager::networks()

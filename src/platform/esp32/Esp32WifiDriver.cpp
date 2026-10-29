@@ -124,11 +124,6 @@ void Esp32WifiDriver::connect(const std::string& ssid, const std::string& passwo
     connecting_ = true;
     stationWanted_ = true;
 
-    // The hostname only takes effect if it's set before the station interface starts.
-    if (!hostname_.empty())
-    {
-        WiFi.setHostname(hostname_.c_str());
-    }
     applyMode();
 
     if (useStaticIp_)
@@ -256,6 +251,10 @@ uint8_t Esp32WifiDriver::channel() const
 void Esp32WifiDriver::setHostname(const std::string& hostname)
 {
     hostname_ = hostname;
+    // The default for when the station interface starts (a scan starts it too), plus the
+    // running interface if there is one; DHCP sends it with the next lease.
+    WiFi.setHostname(hostname_.c_str());
+    WiFi.STA.setHostname(hostname_.c_str());
 }
 
 void Esp32WifiDriver::useDhcp()

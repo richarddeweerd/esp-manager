@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EspManagerVersion.h"
+#include "core/DeviceName.h"
 #include "core/Events.h"
 #include "core/Logger.h"
 #include "core/SavedNetworkStore.h"
@@ -56,6 +57,17 @@ public:
     // defaults are 1 s and 5 min. Returns false, changing nothing, unless 0 < minMs <= maxMs.
     bool setRetryDelays(uint32_t minMs, uint32_t maxMs);
 
+    // The name the device gives the router (DHCP) and the network. Defaults to
+    // "<prefix>-<last 6 hex digits of the MAC>", such as "esp-abcdef". Call these before begin();
+    // a change later reaches the router with the next connection.
+    std::string hostname() const;
+    // Uses `hostname` instead of the default. It must be 1 to 31 letters, digits and hyphens, not
+    // starting or ending with a hyphen; returns false, changing nothing, otherwise.
+    bool setHostname(const std::string& hostname);
+    // Changes the default name's prefix ("esp"), which the Provisioning Portal's network name
+    // will use too. Returns false, changing nothing, if the resulting name isn't valid.
+    bool setNamePrefix(const std::string& prefix);
+
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();
@@ -96,6 +108,9 @@ private:
     SavedNetworkStore store_;
     SavedNetworks networks_{store_, log_};
     WifiConnection connection_;
+    std::string namePrefix_ = kDefaultNamePrefix;
+    std::string hostname_;  // empty: the default name
+    bool begun_ = false;
 };
 
 }  // namespace espmgr
