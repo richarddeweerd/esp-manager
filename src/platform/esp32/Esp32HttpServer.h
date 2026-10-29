@@ -27,12 +27,10 @@ public:
     void on(HttpMethod method, const std::string& path, HttpHandler handler) override;
     void onNotFound(HttpHandler handler) override;
 
+    void sendHeader(const std::string& name, const std::string& value) override;
     void send(int status, const std::string& contentType, const uint8_t* body, size_t length,
               bool gzipped) override;
     void sendRedirect(const std::string& location) override;
-
-    bool authenticateDigest(const std::string& realm, const std::string& user,
-                            const std::string& password) override;
 
     bool startCaptiveDns(const Ipv4Address& apIp) override;
     void stopCaptiveDns() override;

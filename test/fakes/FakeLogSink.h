@@ -23,6 +23,19 @@ public:
         lines.push_back({level, line});
     }
 
+    // True if a line contains `text`.
+    bool contains(const std::string& text) const
+    {
+        for (const Line& line : lines)
+        {
+            if (line.text.find(text) != std::string::npos)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::vector<Line> lines;
 };
 

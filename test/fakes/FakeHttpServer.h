@@ -17,6 +17,19 @@ public:
         std::string body;
         bool gzipped = false;
         std::string location;
+        HttpRequest::Fields headers;
+
+        std::string header(const std::string& name) const
+        {
+            for (const auto& [key, value] : headers)
+            {
+                if (key == name)
+                {
+                    return value;
+                }
+            }
+            return std::string();
+        }
         // False if the handler answered nothing.
         bool sent = false;
     };
@@ -49,6 +62,11 @@ public:
         notFound_ = std::move(handler);
     }
 
+    void sendHeader(const std::string& name, const std::string& value) override
+    {
+        response_.headers.emplace_back(name, value);
+    }
+
     void send(int status, const std::string& contentType, const uint8_t* body, size_t length,
               bool gzipped) override
     {
@@ -64,22 +82,6 @@ public:
         response_.status = 302;
         response_.location = location;
         response_.sent = true;
-    }
-
-    // Accepts the request if the test set `authorized`, and otherwise answers 401 like the real
-    // server's challenge.
-    bool authenticateDigest(const std::string& realm, const std::string& user,
-                            const std::string& password) override
-    {
-        lastAuthRealm = realm;
-        lastAuthUser = user;
-        lastAuthPassword = password;
-        if (authorized)
-        {
-            return true;
-        }
-        send(401, "text/plain", "");
-        return false;
     }
 
     bool startCaptiveDns(const Ipv4Address& apIp) override
@@ -101,6 +103,7 @@ public:
     Response request(HttpMethod method, const std::string& path, HttpRequest::Fields args = {},
                      HttpRequest::Fields headers = {})
     {
+        ++requests;
         response_ = Response();
         if (!running)
         {
@@ -129,7 +132,6 @@ public:
         return response_;
     }
 
-    bool authorized = false;
     // The address requests arrive on; the access point's by default.
     Ipv4Address localIp{192, 168, 4, 1};
 
@@ -138,11 +140,9 @@ public:
     bool running = false;
     uint16_t port = 0;
     int handleCalls = 0;
+    int requests = 0;
     bool captiveDnsActive = false;
     Ipv4Address captiveDnsIp;
-    std::string lastAuthRealm;
-    std::string lastAuthUser;
-    std::string lastAuthPassword;
 
 private:
     struct Route

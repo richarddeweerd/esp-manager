@@ -5,8 +5,10 @@
 #include "core/Events.h"
 #include "core/HttpServer.h"
 #include "core/Logger.h"
+#include "core/ManagementInterface.h"
 #include "core/NetworkScanner.h"
 #include "core/SavedNetworks.h"
+#include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 #include "core/WifiDriver.h"
 
@@ -38,11 +40,14 @@ namespace espmgr
 // internet access when they join a network (Android /generate_204, Apple /hotspot-detect.html,
 // Windows /connecttest.txt, …); the redirect makes them show "sign in to network" and open the
 // page by themselves.
+//
+// When the Developer has enabled the Management Interface, the Owner also chooses its password
+// here. It's stored together with the network, once provisioning completes.
 class ProvisioningPortal
 {
 public:
     static constexpr uint32_t kDefaultTimeoutMs = 10 * 60 * 1000;
-    static constexpr uint16_t kHttpPort = 80;
+    static constexpr uint16_t kHttpPort = WebRoutes::kHttpPort;
     // The channel used when a scan finds nothing.
     static constexpr uint8_t kDefaultChannel = 1;
     // The page's list is scanned again when it's older than this.
@@ -51,13 +56,14 @@ public:
     static constexpr uint64_t kCloseDelayMs = 30000;
 
     // `deviceName` gives the access point's default SSID, `status` what GET /api/status shows.
-    ProvisioningPortal(WifiDriver& wifi, HttpServer& http, Clock& clock, NetworkScanner& scanner,
-                       SavedNetworks& networks, WifiConnection& connection, Events& events,
-                       Logger& log, std::function<std::string()> deviceName,
+    ProvisioningPortal(WifiDriver& wifi, WebRoutes& routes, Clock& clock, NetworkScanner& scanner,
+                       SavedNetworks& networks, WifiConnection& connection,
+                       ManagementInterface& management, Events& events, Logger& log,
+                       std::function<std::string()> deviceName,
                        std::function<DeviceStatus()> status)
-        : wifi_(wifi), http_(http), clock_(clock), scanner_(scanner), networks_(networks),
-          connection_(connection), events_(events), log_(log), deviceName_(std::move(deviceName)),
-          status_(std::move(status))
+        : wifi_(wifi), routes_(routes), http_(routes.http()), clock_(clock), scanner_(scanner),
+          networks_(networks), connection_(connection), management_(management), events_(events),
+          log_(log), deviceName_(std::move(deviceName)), status_(std::move(status))
     {
     }
 
@@ -151,23 +157,26 @@ private:
     void applyRules();
     void registerRoutes();
     void sendScan(const HttpRequest& request);
+    void sendSetup();
     void receiveNetwork(const HttpRequest& request);
     void sendResult();
     void sendError(int status, const char* error);
     // Follows the trial that receiveNetwork() started.
     void followTrial();
     void provisioned(const std::string& ssid);
-    // True if the portal should answer `request`. Otherwise answers it with an error itself.
-    bool accept(const HttpRequest& request);
+    // Called for every request from the Owner.
+    void seen();
     // The setup page's address on the access point, such as "http://192.168.4.1/".
     std::string pageUrl() const;
 
     WifiDriver& wifi_;
+    WebRoutes& routes_;
     HttpServer& http_;
     Clock& clock_;
     NetworkScanner& scanner_;
     SavedNetworks& networks_;
     WifiConnection& connection_;
+    ManagementInterface& management_;
     Events& events_;
     Logger& log_;
     std::function<std::string()> deviceName_;
@@ -202,6 +211,8 @@ private:
     Ipv4Address resultIp_;
     // The network on trial; saved only if the trial connects.
     SavedNetwork candidate_;
+    // The Management Interface password that comes with it; empty to keep the current one.
+    std::string candidateManagementPassword_;
     bool closing_ = false;
     uint64_t closeAtMs_ = 0;
 };

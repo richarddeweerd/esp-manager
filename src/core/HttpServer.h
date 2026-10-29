@@ -86,7 +86,7 @@ private:
 };
 
 // Handlers run inside handle(), so inside process(). Each handler answers its request by
-// calling send() or sendRedirect() exactly once.
+// calling send() or sendRedirect() exactly once, after any sendHeader().
 using HttpHandler = std::function<void(const HttpRequest&)>;
 
 // The web server for the Provisioning Portal and the Management Interface, plus the DNS server
@@ -104,6 +104,9 @@ public:
     virtual void on(HttpMethod method, const std::string& path, HttpHandler handler) = 0;
     virtual void onNotFound(HttpHandler handler) = 0;
 
+    // Adds a header to the answer to the current request; call it before send().
+    virtual void sendHeader(const std::string& name, const std::string& value) = 0;
+
     // Answers the current request. With `gzipped`, the body is already gzip-compressed.
     virtual void send(int status, const std::string& contentType, const uint8_t* body,
                       size_t length, bool gzipped) = 0;
@@ -114,11 +117,6 @@ public:
         send(status, contentType, reinterpret_cast<const uint8_t*>(body.data()), body.size(),
              false);
     }
-
-    // True if the current request carries valid Digest credentials. Otherwise sends the 401
-    // challenge, and the handler must return without sending anything else.
-    virtual bool authenticateDigest(const std::string& realm, const std::string& user,
-                                    const std::string& password) = 0;
 
     // Answers every DNS name with `apIp`, so phones open the Provisioning Portal by themselves.
     virtual bool startCaptiveDns(const Ipv4Address& apIp) = 0;

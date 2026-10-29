@@ -30,6 +30,7 @@ STRINGS = WEB / "strings.en.json"
 # (source folder, header name, C++ name)
 PAGES = [
     ("portal", "PortalPage.h", "kPortalPage"),
+    ("management", "ManagementPage.h", "kManagementPage"),
 ]
 
 BYTE = re.compile(r"0x([0-9a-f]{2})")

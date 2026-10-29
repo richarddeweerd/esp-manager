@@ -265,25 +265,22 @@ void test_http_unknown_path_and_wrong_method_go_to_not_found()
                              response.location.c_str());
 }
 
-void test_http_digest_challenge_when_not_authorized()
+void test_http_headers_are_recorded_with_the_answer()
 {
     HttpServer& http = fakes->platform.http;
     http.on(HttpMethod::Get, "/manage",
             [&http](const HttpRequest&)
             {
-                if (!http.authenticateDigest("esp-abcdef", "admin", "owner-password"))
-                {
-                    return;
-                }
-                http.send(200, "text/html", "ok");
+                http.sendHeader("WWW-Authenticate", "Digest realm=\"esp-abcdef\"");
+                http.send(401, "text/plain", "");
             });
     http.begin(80);
 
-    TEST_ASSERT_EQUAL_INT(401, fakes->http.request(HttpMethod::Get, "/manage").status);
-    TEST_ASSERT_EQUAL_STRING("admin", fakes->http.lastAuthUser.c_str());
+    const FakeHttpServer::Response response = fakes->http.request(HttpMethod::Get, "/manage");
 
-    fakes->http.authorized = true;
-    TEST_ASSERT_EQUAL_INT(200, fakes->http.request(HttpMethod::Get, "/manage").status);
+    TEST_ASSERT_EQUAL_INT(401, response.status);
+    TEST_ASSERT_EQUAL_STRING("Digest realm=\"esp-abcdef\"",
+                             response.header("WWW-Authenticate").c_str());
 }
 
 void test_http_gzipped_body_and_captive_dns()
@@ -330,7 +327,7 @@ int main()
     RUN_TEST(test_storage_reports_failed_writes);
     RUN_TEST(test_http_route_answers_with_the_handler_response);
     RUN_TEST(test_http_unknown_path_and_wrong_method_go_to_not_found);
-    RUN_TEST(test_http_digest_challenge_when_not_authorized);
+    RUN_TEST(test_http_headers_are_recorded_with_the_answer);
     RUN_TEST(test_http_gzipped_body_and_captive_dns);
     RUN_TEST(test_http_stopped_server_answers_nothing);
     return UNITY_END();

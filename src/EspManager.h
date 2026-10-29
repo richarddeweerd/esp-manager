@@ -5,11 +5,13 @@
 #include "core/DeviceStatus.h"
 #include "core/Events.h"
 #include "core/Logger.h"
+#include "core/ManagementInterface.h"
 #include "core/NetworkScanner.h"
 #include "core/Platform.h"
 #include "core/ProvisioningPortal.h"
 #include "core/SavedNetworkStore.h"
 #include "core/SavedNetworks.h"
+#include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 
 #include <functional>
@@ -91,6 +93,10 @@ public:
     // The Provisioning Portal's settings, for example `esp.portal().setPassword("12345678");`.
     ProvisioningPortal& portal();
 
+    // The Management Interface, off by default: `esp.management().enable();` before begin()
+    // turns it on, and the Owner chooses its password in the Provisioning Portal.
+    ManagementInterface& management();
+
     // Scans for networks without blocking: startScan() returns at once (false if no scan could
     // be started), scanComplete() turns true when it's done, and scanResults() then lists what
     // was found, cleaned up as in the Provisioning Portal: hidden networks left out, each SSID
@@ -144,12 +150,22 @@ private:
     SavedNetworks networks_{store_, log_};
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
+    WebRoutes routes_{platform_.wifi, platform_.http};
+    ManagementInterface management_{routes_,
+                                    platform_.storage,
+                                    platform_.clock,
+                                    connection_,
+                                    networks_,
+                                    log_,
+                                    [this] { return hostname(); },
+                                    [this] { return status(); }};
     ProvisioningPortal portal_{platform_.wifi,
-                               platform_.http,
+                               routes_,
                                platform_.clock,
                                scanner_,
                                networks_,
                                connection_,
+                               management_,
                                events_,
                                log_,
                                [this] { return hostname(); },

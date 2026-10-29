@@ -26,6 +26,7 @@ void EspManager::begin()
     begun_ = true;
     connection_.begin();
     portal_.begin();
+    management_.begin();
 }
 
 void EspManager::process()
@@ -34,7 +35,9 @@ void EspManager::process()
     // the others see a scan that has just finished.
     scanner_.process();
     connection_.process();
+    routes_.handle();
     portal_.process();
+    management_.process();
     events_.deliver();
 }
 
@@ -164,6 +167,11 @@ PortalState EspManager::portalState() const
 ProvisioningPortal& EspManager::portal()
 {
     return portal_;
+}
+
+ManagementInterface& EspManager::management()
+{
+    return management_;
 }
 
 bool EspManager::startScan()
