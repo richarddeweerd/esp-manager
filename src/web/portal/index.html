@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
-  The Provisioning Portal. scripts/build-web.py inlines style.css, app.js and the text from
-  ../strings.en.json into one page and gzips it into ../generated/PortalPage.h.
+  The Provisioning Portal. scripts/build-web.py inlines the stylesheets and scripts below and the
+  text from ../strings.en.json into one page and gzips it into ../generated/PortalPage.h.
   A captive portal has no internet: no external fonts, images or scripts.
 -->
 <html lang="en">
@@ -9,10 +9,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title></title>
+<link rel="stylesheet" href="../common/style.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main id="app" class="wizard"></main>
+<script src="../common/common.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

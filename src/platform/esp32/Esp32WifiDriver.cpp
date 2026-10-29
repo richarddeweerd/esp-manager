@@ -280,6 +280,12 @@ Ipv4Address Esp32WifiDriver::localIp() const
     return Ipv4Address(ip[0], ip[1], ip[2], ip[3]);
 }
 
+Ipv4Address Esp32WifiDriver::gatewayIp() const
+{
+    const IPAddress ip = WiFi.gatewayIP();
+    return Ipv4Address(ip[0], ip[1], ip[2], ip[3]);
+}
+
 int8_t Esp32WifiDriver::rssi() const
 {
     return status() == StationStatus::Connected ? WiFi.RSSI() : 0;

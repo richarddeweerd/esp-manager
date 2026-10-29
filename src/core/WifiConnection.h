@@ -73,6 +73,12 @@ public:
         return state_;
     }
 
+    // The network being tried or connected to; empty while Idle.
+    std::string ssid() const
+    {
+        return state_ == ConnectionState::Idle ? std::string() : ssid_;
+    }
+
     // Why the most recent attempt failed or the connection was lost; None until that happens.
     // Kept after a later successful connection.
     FailureReason lastFailure() const

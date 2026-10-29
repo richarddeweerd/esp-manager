@@ -36,6 +36,7 @@ public:
     void useStaticIp(const StaticIpConfig& config) override;
 
     Ipv4Address localIp() const override;
+    Ipv4Address gatewayIp() const override;
     int8_t rssi() const override;
     MacAddress macAddress() const override;
 

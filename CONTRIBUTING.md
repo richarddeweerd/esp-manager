@@ -6,7 +6,7 @@ Thanks for helping. Building and running the tests is described in the [README](
 
 - C++17, formatted with the repository's `.clang-format` (`scripts/check-format.sh` checks it).
 - `PascalCase` types, `camelCase` functions and methods, everything in `namespace espmgr`.
-- Core code in `src/core/` is plain C++. It reaches the hardware only through the interfaces in `src/core/` (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`), so it can be tested on a computer. Only `src/platform/` and the on-device tests in `test/test_hw_*/` may include Arduino or ESP-IDF headers (`scripts/check-includes.sh` checks it).
+- Core code in `src/core/` is plain C++. It reaches the hardware only through the interfaces in `src/core/` (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`), so it can be tested on a computer. Only `src/platform/` and the on-device tests in `test/test_hw_*/` may include Arduino or ESP-IDF headers (`scripts/check-includes.sh` checks it).
 - Nothing in the core blocks: work happens in small steps from `process()`.
 - Web pages live in `src/web/<page>/` and keep every piece of text in `src/web/strings.en.json`, so they can be translated later. After changing one, run `scripts/build-web.py` and commit the regenerated header with it (`scripts/build-web.py --check` checks it).
 - Every change to core behaviour comes with native tests in `test/`, using the fakes in `test/fakes/`.

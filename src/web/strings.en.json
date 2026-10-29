@@ -50,5 +50,26 @@
     "not-saved": "The device couldn't save the network.",
     "unreachable": "Couldn't reach the device. Make sure your phone is still on its Wi-Fi network.",
     "other": "Something went wrong."
+  },
+  "status": "Status",
+  "loading": "Loading…",
+  "connection": "Connection",
+  "gateway": "Gateway",
+  "signal": "Signal",
+  "channel": "Channel",
+  "hostname": "Hostname",
+  "mac": "MAC address",
+  "uptime": "Running for",
+  "days": "d",
+  "memory": "Memory",
+  "kbFree": "KB free",
+  "chip": "Chip",
+  "firmware": "Firmware",
+  "library": "Library",
+  "states": {
+    "Idle": "Not connected",
+    "Connecting": "Connecting",
+    "Connected": "Connected",
+    "Waiting": "Waiting to try again"
   }
 }
