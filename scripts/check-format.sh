@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fail if any C++ source or example sketch doesn't match .clang-format.
+# Fail if any C++ source or example sketch doesn't match .clang-format. The headers that
+# scripts/build-web.py generates are left out; scripts/build-web.py --check covers them.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -12,6 +13,7 @@ while IFS= read -r -d '' file; do
     else
         clang-format --dry-run --Werror "$file" || status=1
     fi
-done < <(find src test examples \( -name '*.h' -o -name '*.cpp' -o -name '*.ino' \) -print0)
+done < <(find src test examples -path src/web/generated -prune -o \
+    \( -name '*.h' -o -name '*.cpp' -o -name '*.ino' \) -print0)
 
 exit $status

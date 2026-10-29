@@ -13,6 +13,7 @@ Needs esptool (5.x) and pyserial. Exits non-zero when a test fails or the run do
 """
 
 import argparse
+import gzip
 import os
 import re
 import subprocess
@@ -97,6 +98,14 @@ def http_checks(ip):
             body = response.read().decode()
             if response.status != 200 or body != "authorized":
                 return f"/hw-auth with credentials answered {response.status} {body!r}"
+
+        with urllib.request.urlopen(f"{base}/page", timeout=5) as response:
+            encoding = response.headers.get("Content-Encoding", "")
+            if response.status != 200 or encoding != "gzip":
+                return f"/page answered {response.status} with Content-Encoding {encoding!r}"
+            page = gzip.decompress(response.read()).decode()
+            if not page.startswith("<!doctype html>") or "const STRINGS = {" not in page:
+                return "/page is not the generated portal page"
 
         no_redirect = urllib.request.build_opener(NoRedirect)
         try:
