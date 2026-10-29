@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- Network list: the Provisioning Portal's page lists the networks in range from a non-blocking scan, each SSID once at its strongest, hidden and weak networks (below -90 dBm, `esp.portal().setMinSignal()`) left out, plus "Other network…" for a hidden one. `esp.startScan()`, `esp.scanComplete()` and `esp.scanResults()` give sketches the same list (#14).
 - Captive portal: while the Provisioning Portal is open, a DNS server answers every name with the access point's address and every other address redirects to the setup page, so phones open it by themselves; `esp.portal().setCaptivePortal(false)` turns it off (#13).
 - Provisioning Portal: opens by itself without a Saved Network, or with `esp.startPortal()`; `esp.stopPortal()`, `esp.portalState()` and the settings on `esp.portal()` (SSID, WPA2 password, inactivity timeout, reopening, opening after failing to connect). A scan first puts the access point on the channel of the strongest Saved or visible network, and the pages answer only on the access point. Scans are shared by the connection and the portal (#12).
 - Web page pipeline: page sources in `src/web/`, their text in `src/web/strings.en.json`, and `scripts/build-web.py`, which inlines and gzips each page into a committed header so it's served straight from flash (#11).

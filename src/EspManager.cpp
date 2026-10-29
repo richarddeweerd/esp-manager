@@ -132,6 +132,21 @@ ProvisioningPortal& EspManager::portal()
     return portal_;
 }
 
+bool EspManager::startScan()
+{
+    return scanner_.start();
+}
+
+bool EspManager::scanComplete() const
+{
+    return !scanner_.busy();
+}
+
+std::vector<ScanResult> EspManager::scanResults() const
+{
+    return NetworkScanner::networkList(scanner_.results(), portal_.minSignal());
+}
+
 SavedNetworks& EspManager::networks()
 {
     return networks_;

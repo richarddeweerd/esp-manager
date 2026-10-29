@@ -39,6 +39,8 @@ public:
     static constexpr uint16_t kHttpPort = 80;
     // The channel used when a scan finds nothing.
     static constexpr uint8_t kDefaultChannel = 1;
+    // The page's list is scanned again when it's older than this.
+    static constexpr uint64_t kScanMaxAgeMs = 10000;
 
     // `deviceName` gives the access point's default SSID.
     ProvisioningPortal(WifiDriver& wifi, HttpServer& http, Clock& clock, NetworkScanner& scanner,
@@ -81,6 +83,14 @@ public:
     // Owner opens http://192.168.4.1/ by hand. Takes effect the next time the portal opens.
     void setCaptivePortal(bool enabled);
 
+    // Networks weaker than this (in dBm) are left out of the list; -90 by default. Applies to
+    // esp.scanResults() too.
+    void setMinSignal(int8_t dbm);
+    int8_t minSignal() const
+    {
+        return minSignalDbm_;
+    }
+
     // --- Driven by EspManager ---
 
     PortalState state() const
@@ -120,6 +130,7 @@ private:
     void close();
     void applyRules();
     void registerRoutes();
+    void sendScan(const HttpRequest& request);
     // True if the portal should answer `request`. Otherwise answers it with an error itself.
     bool accept(const HttpRequest& request);
     // The setup page's address on the access point, such as "http://192.168.4.1/".
@@ -141,6 +152,7 @@ private:
     bool restartOnTimeout_ = true;
     uint32_t openAfterFailingMs_ = 0;
     bool captivePortal_ = true;
+    int8_t minSignalDbm_ = NetworkScanner::kDefaultMinSignalDbm;
 
     bool begun_ = false;
     bool routesRegistered_ = false;
