@@ -1,5 +1,6 @@
 // On-device test of EspManager as a sketch uses it: the default constructor on real hardware,
-// a network saved with esp.networks(), then begin() and process() until connected (#7).
+// a network saved with esp.networks(), then begin() and waitForConnection(), which calls
+// process() (#7, #9).
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
 // The test network stays saved on the board afterwards, as it would after setup.
@@ -43,22 +44,6 @@ const char* name(ConnectionState state)
     return "?";
 }
 
-// Calls process() like loop() does, until `done` or the timeout. Returns whether `done`.
-template <typename Done> bool processUntil(Done done, uint32_t timeoutMs)
-{
-    const uint32_t start = millis();
-    while (!done())
-    {
-        if (millis() - start > timeoutMs)
-        {
-            return false;
-        }
-        esp.process();
-        delay(10);
-    }
-    return true;
-}
-
 }  // namespace
 
 void setUp()
@@ -84,12 +69,13 @@ void test_begin_returns_at_once_and_stays_idle()
     TEST_ASSERT_EQUAL_STRING("Idle", name(esp.state()));
 }
 
-void test_process_connects_to_the_saved_network()
+void test_wait_for_connection_connects_to_the_saved_network()
 {
     HOSTLINK_REQUIRE_NETWORK();
-    TEST_ASSERT_TRUE_MESSAGE(
-        processUntil([] { return esp.state() == ConnectionState::Connected; }, 30000),
-        "not connected within 30 s");
+    const uint32_t start = millis();
+    TEST_ASSERT_TRUE_MESSAGE(esp.waitForConnection(30000), "not connected within 30 s");
+    TEST_ASSERT_LESS_THAN_UINT32(30000, millis() - start);
+    TEST_ASSERT_EQUAL_STRING("Connected", name(esp.state()));
     TEST_ASSERT_EQUAL_STRING(hostlink::testSsid.c_str(), connected.ssid.c_str());
     TEST_ASSERT_FALSE(connected.ip.isUnset());
     TEST_ASSERT_NOT_EQUAL(0, connected.channel);
@@ -128,7 +114,7 @@ void setup()
     UNITY_BEGIN();
     RUN_TEST(test_saved_network_is_stored);
     RUN_TEST(test_begin_returns_at_once_and_stays_idle);
-    RUN_TEST(test_process_connects_to_the_saved_network);
+    RUN_TEST(test_wait_for_connection_connects_to_the_saved_network);
     RUN_TEST(test_each_process_call_is_short);
     UNITY_END();
 

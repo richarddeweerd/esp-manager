@@ -35,6 +35,11 @@ public:
     // Handles pending work without blocking. Call it on every loop().
     void process();
 
+    // Optional: blocks, calling process() itself, until connected or `timeoutMs` has passed.
+    // Returns true if connected. Returns false at once if begin() wasn't called or there's no
+    // Saved Network. Listeners are called as usual while it waits (US01.1.2).
+    bool waitForConnection(uint32_t timeoutMs);
+
     // How much the library prints to Serial; off by default. For example
     // `esp.setLogLevel(espmgr::LogLevel::Debug);`. Call Serial.begin() first.
     void setLogLevel(LogLevel level);
@@ -78,6 +83,9 @@ public:
 
 private:
     friend struct EspManagerTestAccess;
+
+    // How long waitForConnection() pauses between process() calls.
+    static constexpr uint32_t kWaitStepMs = 10;
 
     // Owns the ESP32 hardware objects when the default constructor made them. Type-erased, so
     // this header doesn't depend on the ESP32 code.

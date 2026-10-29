@@ -11,6 +11,7 @@ class Esp32Clock : public Clock
 public:
     uint64_t nowMs() const override;
     uint32_t random(uint32_t below) override;
+    void delayMs(uint32_t ms) override;
 };
 
 }  // namespace espmgr

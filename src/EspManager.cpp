@@ -28,6 +28,25 @@ void EspManager::process()
     events_.deliver();
 }
 
+bool EspManager::waitForConnection(uint32_t timeoutMs)
+{
+    const uint64_t start = platform_.clock.nowMs();
+    for (;;)
+    {
+        process();
+        if (connection_.state() == ConnectionState::Connected)
+        {
+            return true;
+        }
+        if (!connection_.started() || networks_.count() == 0 ||
+            platform_.clock.nowMs() - start >= timeoutMs)
+        {
+            return false;
+        }
+        platform_.clock.delayMs(kWaitStepMs);
+    }
+}
+
 void EspManager::setLogLevel(LogLevel level)
 {
     log_.setLevel(level);
