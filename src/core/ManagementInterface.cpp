@@ -194,7 +194,9 @@ bool ManagementInterface::authorize(const HttpRequest& request)
     {
         return true;
     }
-    if (request.header("Authorization") && check == DigestAuth::Check::Refused)
+    // Arduino's WebServer reports an empty Authorization header when there is none.
+    if (!request.header("Authorization").value_or("").empty() &&
+        check == DigestAuth::Check::Refused)
     {
         log_.info("mgmt", "refused a login");
     }

@@ -190,6 +190,19 @@ void test_wrong_password_is_refused_and_logged()
     TEST_ASSERT_FALSE(fakes.log.contains("guessed password"));
 }
 
+// The first request of every login has no credentials yet; that's no refused login.
+void test_a_request_without_credentials_is_not_logged_as_refused()
+{
+    FakePlatform fakes;
+    Device d(fakes);
+    d.esp.setLogLevel(espmgr::LogLevel::Info);
+    d.esp.management().setPassword(kPassword);
+    d.connect();
+    TEST_ASSERT_EQUAL_INT(401, d.get("/api/status").status);
+    TEST_ASSERT_EQUAL_INT(401, d.get("/api/status", {{"Authorization", ""}}).status);
+    TEST_ASSERT_FALSE(fakes.log.contains("refused a login"));
+}
+
 void test_saved_networks_are_listed_without_passwords()
 {
     FakePlatform fakes;
@@ -450,6 +463,7 @@ int main()
     RUN_TEST(test_right_password_gets_the_page_gzipped);
     RUN_TEST(test_right_password_gets_the_status);
     RUN_TEST(test_wrong_password_is_refused_and_logged);
+    RUN_TEST(test_a_request_without_credentials_is_not_logged_as_refused);
     RUN_TEST(test_saved_networks_are_listed_without_passwords);
     RUN_TEST(test_unknown_path_is_not_found);
     RUN_TEST(test_user_and_realm_can_be_changed);
