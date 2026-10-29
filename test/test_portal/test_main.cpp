@@ -476,12 +476,83 @@ void test_refuses_requests_from_the_stations_network()
     TEST_ASSERT_EQUAL_INT(403, d.get("/anything").status);
 }
 
-void test_unknown_paths_are_not_found()
+// --- Captive portal ---
+
+void test_dns_answers_every_name_with_the_access_point_while_open()
+{
+    Device d;
+    d.begin();
+    TEST_ASSERT_FALSE(d.fakes.http.captiveDnsActive);
+    d.finishScan();
+    TEST_ASSERT_TRUE(d.fakes.http.captiveDnsActive);
+    TEST_ASSERT_EQUAL_STRING("192.168.4.1", d.fakes.http.captiveDnsIp.toString().c_str());
+
+    d.esp.stopPortal();
+    TEST_ASSERT_FALSE(d.fakes.http.captiveDnsActive);
+}
+
+void test_connectivity_checks_are_sent_to_the_page()
 {
     Device d;
     d.begin();
     d.finishScan();
-    TEST_ASSERT_EQUAL_INT(404, d.get("/nothing-here").status);
+    const char* checks[] = {
+        "/generate_204",         // Android
+        "/gen_204",              // Android
+        "/hotspot-detect.html",  // iOS, macOS
+        "/connecttest.txt",      // Windows
+        "/ncsi.txt",             // older Windows
+        "/canonical.html",       // Firefox
+        "/success.txt",          // Firefox
+        "/anything/else?at=all",
+    };
+    for (const char* path : checks)
+    {
+        const FakeHttpServer::Response response = d.get(path);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(302, response.status, path);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE("http://192.168.4.1/", response.location.c_str(), path);
+    }
+}
+
+void test_page_under_another_name_moves_to_the_access_points_address()
+{
+    Device d;
+    d.begin();
+    d.finishScan();
+    FakeHttpServer::Response response =
+        d.fakes.http.request(HttpMethod::Get, "/", {}, {{"Host", "example.com"}});
+    TEST_ASSERT_EQUAL_INT(302, response.status);
+    TEST_ASSERT_EQUAL_STRING("http://192.168.4.1/", response.location.c_str());
+
+    response = d.fakes.http.request(HttpMethod::Get, "/", {}, {{"Host", "192.168.4.1"}});
+    TEST_ASSERT_EQUAL_INT(200, response.status);
+    response = d.fakes.http.request(HttpMethod::Get, "/", {}, {{"host", "192.168.4.1:80"}});
+    TEST_ASSERT_EQUAL_INT(200, response.status);
+}
+
+void test_captive_portal_can_be_turned_off()
+{
+    Device d;
+    d.esp.portal().setCaptivePortal(false);
+    d.begin();
+    d.finishScan();
+    TEST_ASSERT_FALSE(d.fakes.http.captiveDnsActive);
+    TEST_ASSERT_EQUAL_INT(404, d.get("/generate_204").status);
+    TEST_ASSERT_EQUAL_INT(
+        200, d.fakes.http.request(HttpMethod::Get, "/", {}, {{"Host", "example.com"}}).status);
+}
+
+void test_connectivity_checks_from_the_stations_network_are_refused()
+{
+    Device d;
+    d.fakes.wifi.scanStartSucceeds = false;
+    TEST_ASSERT_TRUE(d.esp.networks().save("Home", "correct horse"));
+    d.begin();
+    d.fakes.wifi.completeConnect();
+    d.esp.startPortal();
+    d.esp.process();
+    d.fakes.http.localIp = d.fakes.wifi.ip;
+    TEST_ASSERT_EQUAL_INT(403, d.get("/generate_204").status);
 }
 
 void test_requests_from_another_network_do_not_keep_it_open()
@@ -529,7 +600,11 @@ int main()
     RUN_TEST(test_password_is_never_logged);
     RUN_TEST(test_serves_the_page_on_its_access_point);
     RUN_TEST(test_refuses_requests_from_the_stations_network);
-    RUN_TEST(test_unknown_paths_are_not_found);
+    RUN_TEST(test_dns_answers_every_name_with_the_access_point_while_open);
+    RUN_TEST(test_connectivity_checks_are_sent_to_the_page);
+    RUN_TEST(test_page_under_another_name_moves_to_the_access_points_address);
+    RUN_TEST(test_captive_portal_can_be_turned_off);
+    RUN_TEST(test_connectivity_checks_from_the_stations_network_are_refused);
     RUN_TEST(test_requests_from_another_network_do_not_keep_it_open);
     return UNITY_END();
 }

@@ -57,6 +57,11 @@ void ProvisioningPortal::setOpenAfterFailingFor(uint32_t ms)
     openAfterFailingMs_ = ms;
 }
 
+void ProvisioningPortal::setCaptivePortal(bool enabled)
+{
+    captivePortal_ = enabled;
+}
+
 void ProvisioningPortal::begin()
 {
     begun_ = true;
@@ -191,6 +196,11 @@ void ProvisioningPortal::bringUp(uint8_t channel)
     }
     registerRoutes();
     http_.begin(kHttpPort);
+    dnsRunning_ = captivePortal_ && http_.startCaptiveDns(wifi_.accessPointIp());
+    if (captivePortal_ && !dnsRunning_)
+    {
+        log_.warn("portal", "DNS server didn't start; phones won't open the page by themselves");
+    }
     state_ = PortalState::Active;
     lastActivityMs_ = clock_.nowMs();
     log_.info("portal", "open as %s on channel %u, %s", activeSsid_.c_str(),
@@ -200,6 +210,11 @@ void ProvisioningPortal::bringUp(uint8_t channel)
 
 void ProvisioningPortal::close()
 {
+    if (dnsRunning_)
+    {
+        http_.stopCaptiveDns();
+        dnsRunning_ = false;
+    }
     http_.stop();
     wifi_.stopAccessPoint();
     state_ = PortalState::Off;
@@ -219,15 +234,35 @@ void ProvisioningPortal::registerRoutes()
     http_.on(HttpMethod::Get, "/",
              [this](const HttpRequest& request)
              {
-                 if (accept(request))
+                 if (!accept(request))
                  {
-                     web::sendPortalPage(http_);
+                     return;
                  }
+                 // Asked for under another name, which only the captive DNS gives out: move
+                 // the browser to the access point's address, so the page's own requests and a
+                 // reload keep working.
+                 std::string host = request.header("Host").value_or("");
+                 host = host.substr(0, host.find(':'));
+                 if (dnsRunning_ && !host.empty() && host != wifi_.accessPointIp().toString())
+                 {
+                     http_.sendRedirect(pageUrl());
+                     return;
+                 }
+                 web::sendPortalPage(http_);
              });
+    // Every other address: the phones' connectivity checks and whatever the Owner typed.
     http_.onNotFound(
         [this](const HttpRequest& request)
         {
-            if (accept(request))
+            if (!accept(request))
+            {
+                return;
+            }
+            if (dnsRunning_)
+            {
+                http_.sendRedirect(pageUrl());
+            }
+            else
             {
                 http_.send(404, "text/plain", "Not found");
             }
@@ -251,6 +286,11 @@ bool ProvisioningPortal::accept(const HttpRequest& request)
     }
     lastActivityMs_ = clock_.nowMs();
     return true;
+}
+
+std::string ProvisioningPortal::pageUrl() const
+{
+    return "http://" + wifi_.accessPointIp().toString() + "/";
 }
 
 uint8_t ProvisioningPortal::chooseChannel(const std::vector<SavedNetwork>& networks,

@@ -2,7 +2,8 @@
 // a network saved with esp.networks(), then begin() and waitForConnection(), which calls
 // process() (#7, #9), the default hostname and a static-IP Saved Network (#10), and the
 // Provisioning Portal opened next to the connection (#12). The rig can't join the portal's
-// access point, so it checks from the test network that the portal refuses it there.
+// access point, so it checks from the test network that the portal refuses it there and that the
+// captive DNS server answers every name with the access point's address (#13).
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
 // The test network stays saved on the board afterwards, as it would after setup.
