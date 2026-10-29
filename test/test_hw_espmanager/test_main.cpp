@@ -3,14 +3,16 @@
 // process() (#7, #9), the default hostname and a static-IP Saved Network (#10), and the
 // Provisioning Portal opened next to the connection (#12). The rig can't join the portal's
 // access point, so it checks from the test network that the portal refuses it there and that the
-// captive DNS server answers every name with the access point's address (#13), and the status
-// against what the Wi-Fi library and the chip report (#16).
+// captive DNS server answers every name with the access point's address (#13), the status
+// against what the Wi-Fi library and the chip report (#16), and the Management Interface, which
+// the rig logs in to with Digest over the test network (#17).
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
 // The test network stays saved on the board afterwards, as it would after setup.
 
 #include <Arduino.h>
 #include <EspManager.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <unity.h>
@@ -34,6 +36,21 @@ EspManager esp;
 std::vector<std::string> events;
 ConnectedInfo connected;
 std::string portalSsid;
+
+// Must match scripts/run-hw-tests.py. Set with setPassword(), since the rig can't use the
+// Provisioning Portal; a real device never has a password in its firmware.
+const char* const kManagementPassword = "rig-management";
+
+// Removes a Management Interface password an earlier run left on the board.
+void clearManagementPassword()
+{
+    Preferences preferences;
+    if (preferences.begin(espmgr::ManagementInterface::kStorageNamespace, false))
+    {
+        preferences.clear();
+        preferences.end();
+    }
+}
 
 const char* name(ConnectionState state)
 {
@@ -249,11 +266,39 @@ void test_portal_password_makes_the_access_point_wpa2()
     TEST_ASSERT_TRUE(esp.portal().setPassword(""));
 }
 
+void test_management_interface_logs_the_host_in()
+{
+    HOSTLINK_REQUIRE_NETWORK();
+    TEST_ASSERT_TRUE(esp.management().setPassword(kManagementPassword));
+    // The next process() starts it, since the station is connected.
+    esp.process();
+    TEST_ASSERT_TRUE(esp.management().active());
+
+    Serial.printf("ESPMGR-HW MGMT %s %s\n", WiFi.localIP().toString().c_str(),
+                  esp.hostname().c_str());
+    std::string answer;
+    const uint32_t start = millis();
+    while (millis() - start < 30000)
+    {
+        esp.process();
+        if (Serial.available() > 0 && hostlink::readLine(answer, 1000) &&
+            answer.rfind("MGMT DONE ", 0) == 0)
+        {
+            break;
+        }
+        delay(2);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(answer.rfind("MGMT DONE ", 0) == 0, "no answer from the host");
+    TEST_ASSERT_EQUAL_STRING("ok", answer.substr(10).c_str());
+}
+
 void setup()
 {
     Serial.begin(115200);
     hostlink::askForNetwork(10000);
 
+    clearManagementPassword();
+    esp.management().enable();
     esp.setLogLevel(LogLevel::Info);
     esp.onConnectionStateChanged([](ConnectionState from, ConnectionState to)
                                  { events.push_back(std::string(name(from)) + ">" + name(to)); });
@@ -276,7 +321,9 @@ void setup()
     RUN_TEST(test_portal_refuses_requests_from_the_test_network);
     RUN_TEST(test_stop_portal_closes_the_access_point);
     RUN_TEST(test_portal_password_makes_the_access_point_wpa2);
+    RUN_TEST(test_management_interface_logs_the_host_in);
     UNITY_END();
+    clearManagementPassword();
 
     // Leave the test network properly before the next test is flashed. A board that is just
     // reset stays listed at the Pi's access point, which then refuses its next attempts for a

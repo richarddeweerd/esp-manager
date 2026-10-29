@@ -49,7 +49,10 @@
     "done": "The device is already set up.",
     "not-saved": "The device couldn't save the network.",
     "unreachable": "Couldn't reach the device. Make sure your phone is still on its Wi-Fi network.",
-    "other": "Something went wrong."
+    "other": "Something went wrong.",
+    "management-password-invalid": "A management password has 8 to 63 characters: letters, digits, spaces and the usual symbols.",
+    "management-password-mismatch": "The two passwords aren't the same.",
+    "unreachableManagement": "Couldn't reach the device. The values below may be out of date."
   },
   "status": "Status",
   "loading": "Loading…",
@@ -71,5 +74,18 @@
     "Connecting": "Connecting",
     "Connected": "Connected",
     "Waiting": "Waiting to try again"
-  }
+  },
+  "next": "Next",
+  "managementTitle": "Management password",
+  "managementLead": "Choose a password for this device's management page, which you open later from your own network.",
+  "managementKeepLead": "A management password is set already. Leave both fields empty to keep it, or enter a new one.",
+  "userName": "User name",
+  "repeatPassword": "Repeat the password",
+  "managementLater": "To manage the device later, open http://{ip}/ from your own network and log in as {user}.",
+  "manageTitle": "Device management",
+  "connectedTo": "Connected to",
+  "savedNetworks": "Saved networks",
+  "noSavedNetworks": "No saved networks.",
+  "details": "Details",
+  "device": "Device"
 }

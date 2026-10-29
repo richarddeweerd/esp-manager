@@ -138,6 +138,14 @@ HttpRequest Esp32HttpServer::currentRequest() const
     return request;
 }
 
+void Esp32HttpServer::sendHeader(const std::string& name, const std::string& value)
+{
+    if (server_)
+    {
+        server_->sendHeader(name.c_str(), value.c_str());
+    }
+}
+
 void Esp32HttpServer::send(int status, const std::string& contentType, const uint8_t* body,
                            size_t length, bool gzipped)
 {
@@ -160,21 +168,6 @@ void Esp32HttpServer::sendRedirect(const std::string& location)
     }
     server_->sendHeader("Location", location.c_str(), true);
     server_->send(302, "text/plain", "");
-}
-
-bool Esp32HttpServer::authenticateDigest(const std::string& realm, const std::string& user,
-                                         const std::string& password)
-{
-    if (!server_)
-    {
-        return false;
-    }
-    if (server_->authenticate(user.c_str(), password.c_str()))
-    {
-        return true;
-    }
-    server_->requestAuthentication(DIGEST_AUTH, realm.c_str());
-    return false;
 }
 
 bool Esp32HttpServer::startCaptiveDns(const Ipv4Address& apIp)

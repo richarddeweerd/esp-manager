@@ -12,6 +12,12 @@ const S = {
   hidden: false,
   password: "",
   showPassword: false,
+  // From GET /api/setup: "new" or "keep" when the Owner also chooses a Management Interface
+  // password, "off" when there's no Management Interface.
+  management: "off",
+  user: "",
+  managementPassword: "",
+  managementRepeat: "",
   error: "",
   reason: "",
   ip: "",
@@ -24,6 +30,21 @@ const S = {
 const RESULT_TIMEOUT_MS = 90000;
 
 // --- Talking to the device ---
+
+async function loadSetup() {
+  try {
+    const setup = await getJson("/api/setup");
+    S.management = setup.management;
+    S.user = setup.user;
+    render();
+  } catch (error) {
+    // Ask again; without the answer the wizard doesn't know its last step.
+    setTimeout(loadSetup, 1500);
+  }
+}
+
+// 1 when the wizard has the Management Interface step, 0 otherwise.
+const extra = () => (S.management === "off" ? 0 : 1);
 
 // Asks for the network list until the device's scan has finished.
 let scanTimer = 0;
@@ -47,18 +68,23 @@ async function loadNetworks(refresh) {
 // fail meanwhile are retried until RESULT_TIMEOUT_MS.
 async function submit(saveAnyway) {
   const fields = { ssid: S.ssid, password: S.secured || S.hidden ? S.password : "" };
+  if (extra()) fields.managementPassword = S.managementPassword;
   if (saveAnyway) fields.saveAnyway = "1";
+  // Where the Owner fixes what's wrong.
+  const form = extra() ? "management" : "password";
   let answer;
   try {
     answer = await postForm("/api/connect", fields);
   } catch (error) {
     S.error = STRINGS.errors.unreachable;
-    go("password");
+    go(form);
     return;
   }
   if (!answer.ok) {
-    S.error = STRINGS.errors[answer.data.error] || STRINGS.errors.other;
-    go("password");
+    const code = answer.data.error || "";
+    S.error = STRINGS.errors[code] || STRINGS.errors.other;
+    go(code === "management-password-invalid" ? "management" : code.startsWith("ssid") ||
+      code.startsWith("password") ? "password" : form);
     return;
   }
   showResult(answer.data);
@@ -127,19 +153,38 @@ const screens = {
     const error = S.error ? `<p class="error">${esc(S.error)}</p>` : "";
     return [2, `<h2>${esc(S.hidden ? STRINGS.otherNetwork : S.ssid)}</h2>
       <p class="lead">${esc(lead)}</p>${ssidField}${passwordField}${error}
-      <div class="foot"><button class="btn block" data-act="connect">${esc(STRINGS.connect)}</button>
+      <div class="foot"><button class="btn block" data-act="connect">${esc(extra() ? STRINGS.next : STRINGS.connect)}</button>
         <button class="btn link" data-act="back">← ${esc(STRINGS.back)}</button></div>`];
   },
 
+  management() {
+    const type = S.showPassword ? "text" : "password";
+    const lead = S.management === "keep" ? STRINGS.managementKeepLead : STRINGS.managementLead;
+    const error = S.error ? `<p class="error">${esc(S.error)}</p>` : "";
+    return [3, `<h2>${esc(STRINGS.managementTitle)}</h2>
+      <p class="lead">${esc(lead)}</p>
+      <div class="panel"><dl class="kv"><dt>${esc(STRINGS.userName)}</dt><dd>${esc(S.user)}</dd></dl></div>
+      <div class="field"><label for="managementPassword">${esc(STRINGS.password)}</label>
+        <input id="managementPassword" type="${type}" autocomplete="new-password" autocapitalize="none"
+          maxlength="63" value="${esc(S.managementPassword)}"></div>
+      <div class="field"><label for="managementRepeat">${esc(STRINGS.repeatPassword)}</label>
+        <input id="managementRepeat" type="${type}" autocomplete="new-password" autocapitalize="none"
+          maxlength="63" value="${esc(S.managementRepeat)}"></div>
+      <label class="check"><input type="checkbox" data-act="toggle" ${S.showPassword ? "checked" : ""}>
+        ${esc(STRINGS.showPassword)}</label>${error}
+      <div class="foot"><button class="btn block" data-act="finish">${esc(STRINGS.connect)}</button>
+        <button class="btn link" data-act="backToNetwork">← ${esc(STRINGS.back)}</button></div>`];
+  },
+
   connecting() {
-    return [3, `<div class="center"><div class="spinner"></div>
+    return [3 + extra(), `<div class="center"><div class="spinner"></div>
       <h2>${esc(STRINGS.connecting)}<br>${esc(S.ssid)}</h2>
       <p class="lead">${esc(STRINGS.connectingLead)}</p></div>
       <div class="note">${esc(STRINGS.channelWarning)}</div>`];
   },
 
   failed() {
-    return [3, `<div class="center"><div class="bigicon bad">✕</div>
+    return [3 + extra(), `<div class="center"><div class="bigicon bad">✕</div>
       <h2>${esc(STRINGS.failedTitle)}</h2>
       <p class="lead">${esc(STRINGS.reasons[S.reason] || STRINGS.reasons.other)}</p></div>
       <div class="foot"><button class="btn block" data-act="retry">${esc(STRINGS.tryAgain)}</button>
@@ -148,14 +193,16 @@ const screens = {
   },
 
   done() {
-    return [4, `<div class="center"><div class="bigicon ok">✓</div>
+    const later = extra() ? `<div class="note">${esc(STRINGS.managementLater
+      .replace("{ip}", S.ip).replace("{user}", S.user))}</div>` : "";
+    return [4 + extra(), `<div class="center"><div class="bigicon ok">✓</div>
       <h2>${esc(STRINGS.doneTitle)}</h2><p class="lead">${esc(STRINGS.doneLead)}</p></div>
       <div class="panel"><dl class="kv"><dt>${esc(STRINGS.wifi)}</dt><dd>${esc(S.ssid)}</dd>
-        <dt>${esc(STRINGS.ipAddress)}</dt><dd>${esc(S.ip)}</dd></dl></div>`];
+        <dt>${esc(STRINGS.ipAddress)}</dt><dd>${esc(S.ip)}</dd></dl></div>${later}`];
   },
 
   saved() {
-    return [4, `<div class="center"><div class="bigicon ok">✓</div>
+    return [4 + extra(), `<div class="center"><div class="bigicon ok">✓</div>
       <h2>${esc(STRINGS.savedTitle)}</h2><p class="lead">${esc(STRINGS.savedLead)}</p></div>`];
   },
 
@@ -167,16 +214,18 @@ const screens = {
   },
 
   lost() {
-    return [3, `<div class="center"><div class="bigicon">?</div>
+    return [3 + extra(), `<div class="center"><div class="bigicon">?</div>
       <h2>${esc(STRINGS.lostTitle)}</h2><p class="lead">${esc(STRINGS.lostLead)}</p></div>
       <div class="foot"><button class="btn block" data-act="reload">${esc(STRINGS.reload)}</button></div>`];
   },
 };
 
-// Shows the current screen; its step (1 to 4) lights up the step indicator, 0 hides it.
+// Shows the current screen; its step (1 to 4, or 5 with the Management Interface step) lights up
+// the step indicator, 0 hides it.
 function render() {
   const [step, body] = screens[S.screen]();
-  const steps = step ? `<div class="steps">${[1, 2, 3, 4].map((i) =>
+  const all = extra() ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
+  const steps = step ? `<div class="steps">${all.map((i) =>
     `<i class="${i <= step ? "on" : ""}"></i>`).join("")}</div>` : "";
   // The status is one tap away, except while a test runs.
   const link = S.screen === "status" || S.screen === "connecting" ? ""
@@ -195,8 +244,19 @@ function go(screen) {
 function readFields() {
   const ssid = document.getElementById("ssid");
   const password = document.getElementById("password");
+  const managementPassword = document.getElementById("managementPassword");
+  const managementRepeat = document.getElementById("managementRepeat");
   if (ssid) S.ssid = ssid.value;
   if (password) S.password = password.value;
+  if (managementPassword) S.managementPassword = managementPassword.value;
+  if (managementRepeat) S.managementRepeat = managementRepeat.value;
+}
+
+// The network is complete: on to the Management Interface password, or connect.
+function next() {
+  S.error = "";
+  if (extra()) go("management");
+  else submit(false);
 }
 
 // --- Actions ---
@@ -225,7 +285,21 @@ const actions = {
       go("password");
       return;
     }
+    next();
+  },
+  finish() {
+    readFields();
+    S.error = checkManagement();
+    if (S.error) {
+      go("management");
+      return;
+    }
     submit(false);
+  },
+  backToNetwork() {
+    readFields();
+    S.error = "";
+    go(S.secured || S.hidden ? "password" : "networks");
   },
   retry() {
     S.error = "";
@@ -261,6 +335,16 @@ async function loadStatus() {
   }
 }
 
+function checkManagement() {
+  const password = S.managementPassword;
+  if (password !== S.managementRepeat) return STRINGS.errors["management-password-mismatch"];
+  if (password === "" && S.management === "keep") return "";
+  if (password.length < 8 || password.length > 63 || !/^[\x20-\x7e]*$/.test(password)) {
+    return STRINGS.errors["management-password-invalid"];
+  }
+  return "";
+}
+
 // The checks the device makes too, so most mistakes show without a round trip.
 function check() {
   if (!S.ssid) return STRINGS.errors["ssid-empty"];
@@ -282,7 +366,7 @@ app.addEventListener("click", (event) => {
     Object.assign(S, { ssid: network.ssid, secured: network.secured, hidden: false, password: "", error: "" });
     // An open network has nothing to enter.
     if (network.secured) go("password");
-    else submit(false);
+    else next();
     return;
   }
   const action = event.target.closest("[data-act]");
@@ -290,9 +374,13 @@ app.addEventListener("click", (event) => {
 });
 
 app.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && event.target.matches("input:not([type=checkbox])")) actions.connect();
+  if (event.key === "Enter" && event.target.matches("input:not([type=checkbox])")) {
+    if (S.screen === "management") actions.finish();
+    else actions.connect();
+  }
 });
 
 document.title = STRINGS.title;
 render();
+loadSetup();
 loadNetworks(false);

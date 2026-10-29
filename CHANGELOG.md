@@ -4,7 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+- `HttpServer` has `sendHeader()` instead of `authenticateDigest()`; the core checks Digest credentials itself (#17).
+
 ### Added
+- Management Interface: `esp.management().enable()` turns on a Digest-protected page on the station's address (Wi-Fi, Status and Device tabs, with `GET /api/status` and `GET /api/networks`); `setUser()`, `setRealm()` and `setPassword()`. The Provisioning Portal asks the Owner for its password and stores only the Digest hash once setup completes. The Provisioning Portal and the Management Interface share the web server, each answering on its own address (#17).
 - Device status: `esp.status()` (connection state, SSID, IP address, gateway, signal, channel, hostname, MAC, uptime, free heap, chip, firmware and library version) and `esp.setFirmwareVersion()`; `GET /api/status` and a Status screen in the Provisioning Portal. A new `System` hardware interface reports the heap and chip (#16).
 - Test-then-save: the network the Owner enters in the Provisioning Portal is tried while the access point stays up and saved only if it connects, or straight away with "Save anyway". The page shows the progress, the reason for a failure and a warning that the phone may drop off for a moment, and keeps asking for the result until the phone is back. `onProvisioningCompleted` reports the saved network and the portal closes 30 s later (#15).
 - Network list: the Provisioning Portal's page lists the networks in range from a non-blocking scan, each SSID once at its strongest, hidden and weak networks (below -90 dBm, `esp.portal().setMinSignal()`) left out, plus "Other network…" for a hidden one. `esp.startScan()`, `esp.scanComplete()` and `esp.scanResults()` give sketches the same list (#14).

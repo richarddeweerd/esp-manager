@@ -27,9 +27,6 @@ Esp32Platform hardware;
 Platform& hw = hardware.platform();
 
 const char* const kNamespace = "espmgr-hwtest";
-const char* const kRealm = "esp-manager-hw";
-const char* const kUser = "admin";
-const char* const kAuthPassword = "hw-check";
 
 using hostlink::haveNetwork;
 using hostlink::readLine;
@@ -178,22 +175,12 @@ void test_http_server_answers_the_host()
                               "needs the connection from the previous test");
 
     std::string seenName;
-    int authorized = 0;
     hw.http.on(HttpMethod::Get, "/hw",
                [&seenName](const HttpRequest& request)
                {
                    seenName = request.arg("name").value_or("");
+                   hw.http.sendHeader("X-Espmgr", "rig");
                    hw.http.send(200, "text/plain", "name=" + seenName);
-               });
-    hw.http.on(HttpMethod::Get, "/hw-auth",
-               [&authorized](const HttpRequest&)
-               {
-                   if (!hw.http.authenticateDigest(kRealm, kUser, kAuthPassword))
-                   {
-                       return;
-                   }
-                   ++authorized;
-                   hw.http.send(200, "text/plain", "authorized");
                });
     // The generated page, served from flash as the Provisioning Portal will (#11).
     hw.http.on(HttpMethod::Get, "/page", [](const HttpRequest&) { web::sendPortalPage(hw.http); });
@@ -229,7 +216,6 @@ void test_http_server_answers_the_host()
     TEST_ASSERT_TRUE_MESSAGE(answer.rfind("HTTP DONE ", 0) == 0, "no answer from the host");
     TEST_ASSERT_EQUAL_STRING("ok", answer.substr(10).c_str());
     TEST_ASSERT_EQUAL_STRING("rig", seenName.c_str());
-    TEST_ASSERT_EQUAL_INT(1, authorized);
 }
 
 // --- Storage (NVS) ---

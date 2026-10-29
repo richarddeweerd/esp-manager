@@ -156,7 +156,6 @@ void ProvisioningPortal::process()
 
     if (state_ == PortalState::Active)
     {
-        http_.handle();
         followTrial();
         if (closing_)
         {
@@ -246,7 +245,7 @@ void ProvisioningPortal::bringUp(uint8_t channel)
         return;
     }
     registerRoutes();
-    http_.begin(kHttpPort);
+    routes_.setActive(WebRoutes::Site::Portal, true);
     dnsRunning_ = captivePortal_ && http_.startCaptiveDns(wifi_.accessPointIp());
     if (captivePortal_ && !dnsRunning_)
     {
@@ -268,7 +267,7 @@ void ProvisioningPortal::close()
         http_.stopCaptiveDns();
         dnsRunning_ = false;
     }
-    http_.stop();
+    routes_.setActive(WebRoutes::Site::Portal, false);
     wifi_.stopAccessPoint();
     state_ = PortalState::Off;
     lastConnectedMs_ = clock_.nowMs();
@@ -283,96 +282,94 @@ void ProvisioningPortal::registerRoutes()
         return;
     }
     routesRegistered_ = true;
+    using Site = WebRoutes::Site;
 
-    http_.on(HttpMethod::Get, "/",
-             [this](const HttpRequest& request)
-             {
-                 if (!accept(request))
-                 {
-                     return;
-                 }
-                 // Asked for under another name, which only the captive DNS gives out: move
-                 // the browser to the access point's address, so the page's own requests and a
-                 // reload keep working.
-                 std::string host = request.header("Host").value_or("");
-                 host = host.substr(0, host.find(':'));
-                 if (dnsRunning_ && !host.empty() && host != wifi_.accessPointIp().toString())
-                 {
-                     http_.sendRedirect(pageUrl());
-                     return;
-                 }
-                 web::sendPortalPage(http_);
-             });
-    http_.on(HttpMethod::Get, "/api/scan",
-             [this](const HttpRequest& request)
-             {
-                 if (accept(request))
-                 {
-                     sendScan(request);
-                 }
-             });
-    http_.on(HttpMethod::Get, "/api/status",
-             [this](const HttpRequest& request)
-             {
-                 if (accept(request))
-                 {
-                     JsonWriter json;
-                     writeJson(json, status_());
-                     http_.send(200, "application/json", json.str());
-                 }
-             });
-    http_.on(HttpMethod::Post, "/api/connect",
-             [this](const HttpRequest& request)
-             {
-                 if (accept(request))
-                 {
-                     receiveNetwork(request);
-                 }
-             });
-    http_.on(HttpMethod::Get, "/api/result",
-             [this](const HttpRequest& request)
-             {
-                 if (accept(request))
-                 {
-                     sendResult();
-                 }
-             });
+    routes_.on(Site::Portal, HttpMethod::Get, "/",
+               [this](const HttpRequest& request)
+               {
+                   seen();
+                   // Asked for under another name, which only the captive DNS gives out: move
+                   // the browser to the access point's address, so the page's own requests and
+                   // a reload keep working.
+                   std::string host = request.header("Host").value_or("");
+                   host = host.substr(0, host.find(':'));
+                   if (dnsRunning_ && !host.empty() && host != wifi_.accessPointIp().toString())
+                   {
+                       http_.sendRedirect(pageUrl());
+                       return;
+                   }
+                   web::sendPortalPage(http_);
+               });
+    routes_.on(Site::Portal, HttpMethod::Get, "/api/scan",
+               [this](const HttpRequest& request)
+               {
+                   seen();
+                   sendScan(request);
+               });
+    routes_.on(Site::Portal, HttpMethod::Get, "/api/setup",
+               [this](const HttpRequest&)
+               {
+                   seen();
+                   sendSetup();
+               });
+    routes_.on(Site::Portal, HttpMethod::Get, "/api/status",
+               [this](const HttpRequest&)
+               {
+                   seen();
+                   JsonWriter json;
+                   writeJson(json, status_());
+                   http_.send(200, "application/json", json.str());
+               });
+    routes_.on(Site::Portal, HttpMethod::Post, "/api/connect",
+               [this](const HttpRequest& request)
+               {
+                   seen();
+                   receiveNetwork(request);
+               });
+    routes_.on(Site::Portal, HttpMethod::Get, "/api/result",
+               [this](const HttpRequest&)
+               {
+                   seen();
+                   sendResult();
+               });
     // Every other address: the phones' connectivity checks and whatever the Owner typed.
-    http_.onNotFound(
-        [this](const HttpRequest& request)
-        {
-            if (!accept(request))
-            {
-                return;
-            }
-            if (dnsRunning_)
-            {
-                http_.sendRedirect(pageUrl());
-            }
-            else
-            {
-                http_.send(404, "text/plain", "Not found");
-            }
-        });
+    routes_.onNotFound(Site::Portal,
+                       [this](const HttpRequest&)
+                       {
+                           seen();
+                           if (dnsRunning_)
+                           {
+                               http_.sendRedirect(pageUrl());
+                           }
+                           else
+                           {
+                               http_.send(404, "text/plain", "Not found");
+                           }
+                       });
 }
 
-bool ProvisioningPortal::accept(const HttpRequest& request)
+void ProvisioningPortal::seen()
 {
-    if (state_ != PortalState::Active)
-    {
-        http_.send(404, "text/plain", "Not found");
-        return false;
-    }
-    // Anyone who reaches the portal can change the Wi-Fi settings, so it answers only on its
-    // own access point, not on the network the station is connected to.
-    if (request.localIp != wifi_.accessPointIp())
-    {
-        http_.send(403, "text/plain",
-                   "The setup pages are only available on the device's own Wi-Fi network.");
-        return false;
-    }
     lastActivityMs_ = clock_.nowMs();
-    return true;
+}
+
+// What the page asks for besides the network: "new" when the Owner has to choose a Management
+// Interface password, "keep" when one is stored already, "off" without a Management Interface.
+void ProvisioningPortal::sendSetup()
+{
+    const char* management = "off";
+    if (management_.enabled())
+    {
+        management = management_.hasPassword() ? "keep" : "new";
+    }
+    JsonWriter json;
+    json.beginObject()
+        .key("management")
+        .string(management)
+        .key("user")
+        .string(management_.enabled() ? management_.user() : std::string())
+        .endObject();
+    http_.send(200, "application/json", json.str());
 }
 
 // The network list for the page. Answers at once with what the last scan found, and starts a
@@ -405,7 +402,8 @@ void ProvisioningPortal::sendScan(const HttpRequest& request)
     http_.send(200, "application/json", json.str());
 }
 
-// POST /api/connect with ssid, password and, to skip the test, saveAnyway=1.
+// POST /api/connect with ssid, password and, to skip the test, saveAnyway=1. With the
+// Management Interface enabled, managementPassword too; it may be left empty when one is stored.
 void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
 {
     if (result_ == Result::Testing)
@@ -429,6 +427,18 @@ void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
         sendError(400, code(problem));
         return;
     }
+    std::string managementPassword;
+    if (management_.enabled())
+    {
+        managementPassword = request.arg("managementPassword").value_or("");
+        const bool keep = managementPassword.empty() && management_.hasPassword();
+        if (!keep && !ManagementInterface::isValidPassword(managementPassword))
+        {
+            log_.info("portal", "refused a network: management password isn't 8 to 63 characters");
+            sendError(400, "management-password-invalid");
+            return;
+        }
+    }
 
     resultSsid_ = network.ssid;
     resultFailure_ = FailureReason::None;
@@ -441,6 +451,7 @@ void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
             return;
         }
         log_.info("portal", "saved %s without testing it", network.ssid.c_str());
+        candidateManagementPassword_ = managementPassword;
         result_ = Result::Saved;
         provisioned(network.ssid);
     }
@@ -448,6 +459,7 @@ void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
     {
         log_.info("portal", "testing %s", network.ssid.c_str());
         candidate_ = network;
+        candidateManagementPassword_ = managementPassword;
         result_ = Result::Testing;
         connection_.tryNetwork(network);
     }
@@ -490,11 +502,17 @@ void ProvisioningPortal::followTrial()
     if (result_ != Result::Testing)
     {
         candidate_ = SavedNetwork();
+        candidateManagementPassword_.clear();
     }
 }
 
 void ProvisioningPortal::provisioned(const std::string& ssid)
 {
+    if (!candidateManagementPassword_.empty())
+    {
+        management_.setPassword(candidateManagementPassword_);
+        candidateManagementPassword_.clear();
+    }
     events_.raiseProvisioningCompleted(ssid);
     closing_ = true;
     closeAtMs_ = clock_.nowMs() + kCloseDelayMs;

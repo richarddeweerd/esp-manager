@@ -14,6 +14,8 @@ Needs esptool (5.x) and pyserial. Exits non-zero when a test fails or the run do
 
 import argparse
 import gzip
+import hashlib
+import json
 import os
 import socket
 import struct
@@ -31,9 +33,9 @@ BAUD = 115200
 RESULT = re.compile(r"^(?P<file>[^:]+):(?P<line>\d+):(?P<name>\w+):(?P<status>PASS|FAIL|IGNORE)(?::\s?(?P<message>.*))?$")
 SUMMARY = re.compile(r"^(?P<tests>\d+) Tests (?P<failures>\d+) Failures (?P<ignored>\d+) Ignored")
 
-# Must match test/test_hw_platform/test_main.cpp.
-REALM_USER = "admin"
-REALM_PASSWORD = "hw-check"
+# Must match test/test_hw_espmanager/test_main.cpp. A password for the rig's board only.
+MANAGEMENT_USER = "admin"
+MANAGEMENT_PASSWORD = "rig-management"
 
 
 def flash(port, firmware):
@@ -85,21 +87,8 @@ def http_checks(ip):
             body = response.read().decode()
             if response.status != 200 or body != "name=rig":
                 return f"/hw answered {response.status} {body!r}"
-
-        try:
-            urllib.request.urlopen(f"{base}/hw-auth", timeout=5)
-            return "/hw-auth answered without credentials"
-        except urllib.error.HTTPError as error:
-            if error.code != 401:
-                return f"/hw-auth without credentials answered {error.code}, not 401"
-
-        passwords = urllib.request.HTTPPasswordMgrWithDefaultRealm()
-        passwords.add_password(None, base, REALM_USER, REALM_PASSWORD)
-        digest = urllib.request.build_opener(urllib.request.HTTPDigestAuthHandler(passwords))
-        with digest.open(f"{base}/hw-auth", timeout=5) as response:
-            body = response.read().decode()
-            if response.status != 200 or body != "authorized":
-                return f"/hw-auth with credentials answered {response.status} {body!r}"
+            if response.headers.get("X-Espmgr") != "rig":
+                return "/hw lacks the header set with sendHeader()"
 
         with urllib.request.urlopen(f"{base}/page", timeout=5) as response:
             encoding = response.headers.get("Content-Encoding", "")
@@ -159,6 +148,76 @@ def portal_checks(ip):
     return "ok"
 
 
+def md5(text):
+    return hashlib.md5(text.encode()).hexdigest()
+
+
+def digest_fields(header):
+    """The fields of a WWW-Authenticate: Digest header."""
+    return dict(re.findall(r'(\w+)="?([^",]*)"?', header.split(" ", 1)[1]))
+
+
+def digest_get(url, path, password, count, challenge=None):
+    """GET `path` with Digest credentials (qop=auth). Asks for a challenge first unless one is
+    given. Returns (status, headers, body, challenge)."""
+    if challenge is None:
+        try:
+            urllib.request.urlopen(url + path, timeout=5)
+            raise RuntimeError(f"{path} answered without credentials")
+        except urllib.error.HTTPError as error:
+            if error.code != 401:
+                raise RuntimeError(f"{path} without credentials answered {error.code}, not 401")
+            challenge = digest_fields(error.headers.get("WWW-Authenticate", ""))
+    nc = f"{count:08x}"
+    cnonce = "72696721"
+    ha1 = md5(f"{MANAGEMENT_USER}:{challenge['realm']}:{password}")
+    ha2 = md5(f"GET:{path}")
+    response = md5(f"{ha1}:{challenge['nonce']}:{nc}:{cnonce}:auth:{ha2}")
+    header = (f'Digest username="{MANAGEMENT_USER}", realm="{challenge["realm"]}", '
+              f'nonce="{challenge["nonce"]}", uri="{path}", algorithm=MD5, qop=auth, nc={nc}, '
+              f'cnonce="{cnonce}", response="{response}"')
+    request = urllib.request.Request(url + path, headers={"Authorization": header})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as answer:
+            return answer.status, answer.headers, answer.read(), challenge
+    except urllib.error.HTTPError as error:
+        return error.code, error.headers, b"", challenge
+
+
+def management_checks(ip, hostname):
+    """Runs the host side of test_management_interface_logs_the_host_in: the Management
+    Interface asks for Digest credentials, refuses a wrong password and a replayed request, and
+    serves the status and the page to the right one. Returns "ok" or what failed."""
+    url = f"http://{ip}"
+    try:
+        status, _, _, challenge = digest_get(url, "/api/status", "wrong password", 1)
+        if challenge.get("qop") != "auth" or challenge.get("realm") != hostname:
+            return f"unexpected challenge {challenge}"
+        if status != 401:
+            return f"a wrong password got {status}, not 401"
+
+        status, _, body, challenge = digest_get(url, "/api/status", MANAGEMENT_PASSWORD, 1)
+        if status != 200:
+            return f"the right password got {status} for /api/status"
+        data = json.loads(body)
+        if data.get("hostname") != hostname or data.get("ip") != ip or \
+                data.get("connection") != "Connected":
+            return f"/api/status answered {data}"
+
+        status, _, _, _ = digest_get(url, "/api/status", MANAGEMENT_PASSWORD, 1, challenge)
+        if status != 401:
+            return f"a replayed request got {status}, not 401"
+
+        status, headers, body, _ = digest_get(url, "/", MANAGEMENT_PASSWORD, 2, challenge)
+        if status != 200 or headers.get("Content-Encoding") != "gzip":
+            return f"/ answered {status} with Content-Encoding {headers.get('Content-Encoding')!r}"
+        if '"manageTitle"' not in gzip.decompress(body).decode():
+            return "/ is not the Management Interface page"
+    except (OSError, RuntimeError, ValueError, urllib.error.URLError) as error:
+        return f"request failed: {error}"
+    return "ok"
+
+
 def run(conn, ssid, password, timeout_s):
     """Talks to the board until Unity prints its summary. Returns (results, summary)."""
     results = []
@@ -196,6 +255,11 @@ def run(conn, ssid, password, timeout_s):
                 outcome = portal_checks(line.split(" ", 2)[2])
                 print(f"==> Portal checks: {outcome}", flush=True)
                 conn.write(f"PORTAL DONE {outcome}\n".encode())
+            elif line.startswith("ESPMGR-HW MGMT "):
+                _, _, ip, hostname = line.split(" ", 3)
+                outcome = management_checks(ip, hostname)
+                print(f"==> Management Interface checks: {outcome}", flush=True)
+                conn.write(f"MGMT DONE {outcome}\n".encode())
             elif (match := RESULT.match(line)):
                 results.append(match.groupdict())
             elif (match := SUMMARY.match(line)):

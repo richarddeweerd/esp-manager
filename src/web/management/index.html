@@ -1,0 +1,20 @@
+<!doctype html>
+<!--
+  The Management Interface. scripts/build-web.py inlines the stylesheets and scripts below and the
+  text from ../strings.en.json into one page and gzips it into ../generated/ManagementPage.h.
+  The browser asks for the password (HTTP Digest) before it gets this page.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title></title>
+<link rel="stylesheet" href="../common/style.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app" class="manage"></main>
+<script src="../common/common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

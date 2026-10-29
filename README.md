@@ -77,6 +77,17 @@ esp.portal().setOpenAfterFailingFor(15 * 60 * 1000);  // also open when not conn
 
 `esp.status()` returns everything the status pages show: connection state, SSID, IP address, gateway, signal, channel, hostname, MAC, uptime, free heap, chip and versions. Set your own version for it with `esp.setFirmwareVersion("1.4.2")`. The Provisioning Portal's page shows the same under "Status"; it never shows a password.
 
+The Management Interface is a password-protected page on the device's own address on the Owner's network, with a Wi-Fi, a Status and a Device tab. It's off by default; turn it on before `begin()`:
+
+```cpp
+esp.management().enable();
+esp.management().setUser("owner");           // "admin" by default
+esp.management().setRealm("Kitchen lamp");   // what the browser's login shows; the hostname by default
+esp.begin();
+```
+
+The Provisioning Portal then asks the Owner for the management password, which is stored when setup completes. Until a password is stored, the Management Interface stays off. If the Owner enters the password some other way, over serial or Bluetooth for example, store it with `esp.management().setPassword(password)`. Never hard-code a password in the firmware: every device would share it. Only the HTTP Digest hash of the password is stored, and it includes the user and realm, so changing either means the Owner has to set the password again through the Provisioning Portal.
+
 Your own code can scan too, without blocking: `esp.startScan()`, then once `esp.scanComplete()` is true, `esp.scanResults()` gives the same cleaned-up list as the setup page (SSID, signal in dBm, channel and whether it's secured).
 
 The library is silent by default. To see what it does, start `Serial` and pick a log level (`Error`, `Warn`, `Info`, `Debug` or `Verbose`):
@@ -107,7 +118,7 @@ The events are `onConnected`, `onDisconnected`, `onConnectFailed`, `onConnection
 ## Security notes
 
 - Wi-Fi credentials are stored in the ESP32's NVS flash. They are only encrypted at rest if you enable ESP32 flash and NVS encryption.
-- The device can't realistically serve HTTPS, so the management page uses HTTP Digest authentication and assumes a trusted local network.
+- The device can't realistically serve HTTPS, so the Management Interface uses HTTP Digest authentication and assumes a trusted local network. Digest keeps the password off the network, but anyone on it can read the pages themselves. Only the Digest hash of the password is stored, never the password.
 
 ## Building and testing
 
