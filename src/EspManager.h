@@ -42,6 +42,15 @@ public:
     // Where the Wi-Fi connection stands: Idle, Connecting, Connected or Waiting (to retry).
     ConnectionState state() const;
 
+    // Why the last connection attempt failed or the connection was lost (None until then), for
+    // example to show it to the Owner. espmgr::toString() gives a short English text.
+    FailureReason lastFailure() const;
+
+    // How long to wait before retrying after a failure: `minMs` after the first, doubling after
+    // each further failure in a row up to `maxMs`, with some random variation below it. The
+    // defaults are 1 s and 5 min. Returns false, changing nothing, unless 0 < minMs <= maxMs.
+    bool setRetryDelays(uint32_t minMs, uint32_t maxMs);
+
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();

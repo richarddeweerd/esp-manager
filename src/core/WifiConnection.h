@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace espmgr
 {
@@ -20,17 +21,19 @@ namespace espmgr
 //                            │      ▼                        │
 //                            └── Waiting ◀───────────────────┘
 //
-// Waiting retries after kRetryDelayMs, or goes back to Idle once there's no Saved Network.
+// Each attempt scans first and joins the best reachable Saved Network. Waiting lasts longer
+// after each failure in a row (exponential backoff with random variation), and goes back to
+// Idle once there's no Saved Network.
 class WifiConnection
 {
 public:
-    // How long one attempt may take before it counts as failed.
+    // How long one attempt, scan included, may take before it counts as failed.
     static constexpr uint64_t kAttemptTimeoutMs = 20000;
-    // How long Waiting lasts before the next attempt. #8 replaces it with backoff.
-    static constexpr uint64_t kRetryDelayMs = 1000;
+    static constexpr uint32_t kDefaultMinRetryDelayMs = 1000;
+    static constexpr uint32_t kDefaultMaxRetryDelayMs = 5 * 60 * 1000;
 
-    WifiConnection(WifiDriver& wifi, const Clock& clock, const SavedNetworks& networks,
-                   Events& events, Logger& log)
+    WifiConnection(WifiDriver& wifi, Clock& clock, const SavedNetworks& networks, Events& events,
+                   Logger& log)
         : wifi_(wifi), clock_(clock), networks_(networks), events_(events), log_(log)
     {
     }
@@ -51,22 +54,50 @@ public:
         return state_;
     }
 
+    // Why the most recent attempt failed or the connection was lost; None until that happens.
+    // Kept after a later successful connection.
+    FailureReason lastFailure() const
+    {
+        return lastFailure_;
+    }
+
+    // The wait after the first failure, doubling after each further one up to `maxMs`. Returns
+    // false, changing nothing, unless 0 < minMs <= maxMs.
+    bool setRetryDelays(uint32_t minMs, uint32_t maxMs);
+
+    // The base delay before the next retry after `failures` failures in a row; the actual wait
+    // is between 75 % and 100 % of it, but never below the minimum.
+    uint64_t baseRetryDelay(uint32_t failures) const;
+
+    // The best reachable Saved Network: the lowest priority number among those in the scan
+    // results, the strongest signal breaking ties. If none was found, the first Saved Network by
+    // priority, since hidden networks don't show up in a scan.
+    static SavedNetwork choose(const std::vector<SavedNetwork>& networks,
+                               const std::vector<ScanResult>& scan);
+
 private:
     void startAttempt();
+    void connectTo(const SavedNetwork& network);
     void attemptFailed(FailureReason reason);
+    void scheduleRetry();
     void setState(ConnectionState next);
 
     WifiDriver& wifi_;
-    const Clock& clock_;
+    Clock& clock_;
     const SavedNetworks& networks_;
     Events& events_;
     Logger& log_;
 
     bool started_ = false;
     ConnectionState state_ = ConnectionState::Idle;
+    FailureReason lastFailure_ = FailureReason::None;
     std::string ssid_;  // of the current or last attempt
+    bool scanning_ = false;
     uint64_t attemptStartedMs_ = 0;
     uint64_t retryAtMs_ = 0;
+    uint32_t failuresInARow_ = 0;
+    uint32_t minRetryDelayMs_ = kDefaultMinRetryDelayMs;
+    uint32_t maxRetryDelayMs_ = kDefaultMaxRetryDelayMs;
 };
 
 }  // namespace espmgr

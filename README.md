@@ -47,7 +47,7 @@ esp.networks().save("Home", "wifi password");  // stored in NVS; replaces the pr
 if (esp.state() == espmgr::ConnectionState::Connected) { /* … */ }
 ```
 
-The connection state is `Idle` (no Saved Network), `Connecting`, `Connected` or `Waiting` (to try again after a failure or a lost connection).
+The connection state is `Idle` (no Saved Network), `Connecting`, `Connected` or `Waiting` (to try again after a failure or a lost connection). Each attempt scans first and joins the best Saved Network in range. After a failure the device waits before trying again, 1 s at first and twice as long after each further failure, up to 5 minutes, with some randomness so devices don't all retry at once. `esp.setRetryDelays(minMs, maxMs)` changes those limits, and `esp.lastFailure()` tells why the last attempt failed (`espmgr::toString()` turns it into text such as "wrong password").
 
 The library is silent by default. To see what it does, start `Serial` and pick a log level (`Error`, `Warn`, `Info`, `Debug` or `Verbose`):
 

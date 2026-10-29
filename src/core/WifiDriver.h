@@ -21,6 +21,27 @@ enum class FailureReason
     Other,
 };
 
+// A short English name for logs and status pages, such as "wrong password".
+inline const char* toString(FailureReason reason)
+{
+    switch (reason)
+    {
+    case FailureReason::None:
+        return "none";
+    case FailureReason::NetworkNotFound:
+        return "network not found";
+    case FailureReason::WrongPassword:
+        return "wrong password";
+    case FailureReason::Timeout:
+        return "timed out";
+    case FailureReason::ConnectionLost:
+        return "connection lost";
+    case FailureReason::Other:
+        break;
+    }
+    return "other";
+}
+
 enum class StationStatus
 {
     Disconnected,

@@ -38,6 +38,16 @@ ConnectionState EspManager::state() const
     return connection_.state();
 }
 
+FailureReason EspManager::lastFailure() const
+{
+    return connection_.lastFailure();
+}
+
+bool EspManager::setRetryDelays(uint32_t minMs, uint32_t maxMs)
+{
+    return connection_.setRetryDelays(minMs, maxMs);
+}
+
 SavedNetworks& EspManager::networks()
 {
     return networks_;
