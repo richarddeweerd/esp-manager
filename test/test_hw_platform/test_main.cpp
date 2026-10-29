@@ -12,6 +12,7 @@
 #include <core/SavedNetworkStore.h>
 #include <platform/esp32/Esp32Platform.h>
 #include <unity.h>
+#include <web/Pages.h>
 
 #include "../hw/HostLink.h"
 
@@ -194,6 +195,8 @@ void test_http_server_answers_the_host()
                    ++authorized;
                    hw.http.send(200, "text/plain", "authorized");
                });
+    // The generated page, served from flash as the Provisioning Portal will (#11).
+    hw.http.on(HttpMethod::Get, "/page", [](const HttpRequest&) { web::sendPortalPage(hw.http); });
     hw.http.onNotFound([](const HttpRequest&) { hw.http.sendRedirect("/hw"); });
     hw.http.begin(80);
 
