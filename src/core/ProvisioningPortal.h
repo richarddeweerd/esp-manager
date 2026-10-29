@@ -26,6 +26,12 @@ namespace espmgr
 // its channel: that of the strongest Saved Network in range, otherwise of the strongest network
 // in range, so the access point is less likely to jump channels when the station connects. It
 // closes after a time without requests from the Owner.
+//
+// It's a captive portal: while it's open, a DNS server answers every name with the access point's
+// address, and every unknown address on it redirects to the setup page. Phones check for
+// internet access when they join a network (Android /generate_204, Apple /hotspot-detect.html,
+// Windows /connecttest.txt, …); the redirect makes them show "sign in to network" and open the
+// page by themselves.
 class ProvisioningPortal
 {
 public:
@@ -71,6 +77,10 @@ public:
     // and closes it again once connected. 0 (the default) never does.
     void setOpenAfterFailingFor(uint32_t ms);
 
+    // Turns the captive portal off (it's on by default): no DNS server and no redirects, so the
+    // Owner opens http://192.168.4.1/ by hand. Takes effect the next time the portal opens.
+    void setCaptivePortal(bool enabled);
+
     // --- Driven by EspManager ---
 
     PortalState state() const
@@ -112,6 +122,8 @@ private:
     void registerRoutes();
     // True if the portal should answer `request`. Otherwise answers it with an error itself.
     bool accept(const HttpRequest& request);
+    // The setup page's address on the access point, such as "http://192.168.4.1/".
+    std::string pageUrl() const;
 
     WifiDriver& wifi_;
     HttpServer& http_;
@@ -128,6 +140,7 @@ private:
     uint32_t timeoutMs_ = kDefaultTimeoutMs;
     bool restartOnTimeout_ = true;
     uint32_t openAfterFailingMs_ = 0;
+    bool captivePortal_ = true;
 
     bool begun_ = false;
     bool routesRegistered_ = false;
@@ -136,6 +149,7 @@ private:
     bool starting_ = false;
     Opened reason_ = Opened::ByRequest;
     std::string activeSsid_;
+    bool dnsRunning_ = false;
     uint64_t lastActivityMs_ = 0;
     // Set once the portal has opened for a missing Saved Network, so closing it doesn't make it
     // open again straight away; cleared when a network is saved.

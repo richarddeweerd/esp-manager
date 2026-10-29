@@ -15,6 +15,8 @@ Needs esptool (5.x) and pyserial. Exits non-zero when a test fails or the run do
 import argparse
 import gzip
 import os
+import socket
+import struct
 import re
 import subprocess
 import sys
@@ -120,9 +122,31 @@ def http_checks(ip):
     return "ok"
 
 
+def dns_lookup(server, name, timeout_s=5):
+    """Asks `server` for the A record of `name` and returns the first address, or None."""
+    query = struct.pack(">HHHHHH", 0x4553, 0x0100, 1, 0, 0, 0)
+    query += b"".join(bytes([len(part)]) + part.encode() for part in name.split(".")) + b"\0"
+    query += struct.pack(">HH", 1, 1)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(timeout_s)
+        sock.sendto(query, (server, 53))
+        answer, _ = sock.recvfrom(512)
+    if len(answer) < 12 or struct.unpack(">H", answer[6:8])[0] == 0:
+        return None
+    # The last record's data, which for a single A answer is its four address bytes.
+    return socket.inet_ntoa(answer[-4:])
+
+
 def portal_checks(ip):
     """Runs the host side of test_portal_refuses_requests_from_the_test_network: the
-    Provisioning Portal only answers on its own access point. Returns "ok" or what failed."""
+    Provisioning Portal only answers on its own access point, and its captive DNS server
+    answers every name with the access point's address. Returns "ok" or what failed."""
+    try:
+        address = dns_lookup(ip, "connectivitycheck.gstatic.com")
+    except OSError as error:
+        return f"DNS query failed: {error}"
+    if address != "192.168.4.1":
+        return f"DNS answered {address}, not 192.168.4.1"
     for path in ("/", "/hotspot-detect.html"):
         try:
             with urllib.request.urlopen(f"http://{ip}{path}", timeout=5) as response:
