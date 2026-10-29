@@ -27,6 +27,11 @@ namespace espmgr
 // in range, so the access point is less likely to jump channels when the station connects. It
 // closes after a time without requests from the Owner.
 //
+// The Owner's network is tested before it's saved (test-then-save): the station tries it while
+// the access point stays up, and only a network that worked is saved, unless the Owner chooses
+// "save anyway". Either way provisioningCompleted is raised and the portal closes a little later,
+// once the page has had time to show the result.
+//
 // It's a captive portal: while it's open, a DNS server answers every name with the access point's
 // address, and every unknown address on it redirects to the setup page. Phones check for
 // internet access when they join a network (Android /generate_204, Apple /hotspot-detect.html,
@@ -41,11 +46,13 @@ public:
     static constexpr uint8_t kDefaultChannel = 1;
     // The page's list is scanned again when it's older than this.
     static constexpr uint64_t kScanMaxAgeMs = 10000;
+    // How long the portal stays open after provisioning, so the page can fetch the result.
+    static constexpr uint64_t kCloseDelayMs = 30000;
 
     // `deviceName` gives the access point's default SSID.
     ProvisioningPortal(WifiDriver& wifi, HttpServer& http, Clock& clock, NetworkScanner& scanner,
-                       const SavedNetworks& networks, const WifiConnection& connection,
-                       Events& events, Logger& log, std::function<std::string()> deviceName)
+                       SavedNetworks& networks, WifiConnection& connection, Events& events,
+                       Logger& log, std::function<std::string()> deviceName)
         : wifi_(wifi), http_(http), clock_(clock), scanner_(scanner), networks_(networks),
           connection_(connection), events_(events), log_(log), deviceName_(std::move(deviceName))
     {
@@ -118,6 +125,16 @@ public:
     static bool isValidPassword(const std::string& password);
 
 private:
+    // Where the Owner's network stands, for GET /api/result.
+    enum class Result
+    {
+        None,
+        Testing,
+        Connected,
+        Failed,
+        Saved,
+    };
+
     enum class Opened
     {
         ByRequest,
@@ -131,6 +148,12 @@ private:
     void applyRules();
     void registerRoutes();
     void sendScan(const HttpRequest& request);
+    void receiveNetwork(const HttpRequest& request);
+    void sendResult();
+    void sendError(int status, const char* error);
+    // Follows the trial that receiveNetwork() started.
+    void followTrial();
+    void provisioned(const std::string& ssid);
     // True if the portal should answer `request`. Otherwise answers it with an error itself.
     bool accept(const HttpRequest& request);
     // The setup page's address on the access point, such as "http://192.168.4.1/".
@@ -140,8 +163,8 @@ private:
     HttpServer& http_;
     Clock& clock_;
     NetworkScanner& scanner_;
-    const SavedNetworks& networks_;
-    const WifiConnection& connection_;
+    SavedNetworks& networks_;
+    WifiConnection& connection_;
     Events& events_;
     Logger& log_;
     std::function<std::string()> deviceName_;
@@ -168,6 +191,15 @@ private:
     bool openedForNoNetwork_ = false;
     // When the device was last connected, or the portal last closed.
     uint64_t lastConnectedMs_ = 0;
+
+    Result result_ = Result::None;
+    std::string resultSsid_;
+    FailureReason resultFailure_ = FailureReason::None;
+    Ipv4Address resultIp_;
+    // The network on trial; saved only if the trial connects.
+    SavedNetwork candidate_;
+    bool closing_ = false;
+    uint64_t closeAtMs_ = 0;
 };
 
 }  // namespace espmgr

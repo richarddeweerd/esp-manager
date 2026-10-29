@@ -13,6 +13,41 @@ namespace
 
 constexpr size_t kMaxSsidLength = 32;
 
+// The codes the page turns into its own text.
+const char* code(SavedNetwork::Problem problem)
+{
+    switch (problem)
+    {
+    case SavedNetwork::Problem::SsidEmpty:
+        return "ssid-empty";
+    case SavedNetwork::Problem::SsidTooLong:
+        return "ssid-too-long";
+    case SavedNetwork::Problem::PasswordTooShort:
+        return "password-too-short";
+    case SavedNetwork::Problem::PasswordTooLong:
+        return "password-too-long";
+    default:
+        return "password-invalid";
+    }
+}
+
+const char* code(FailureReason reason)
+{
+    switch (reason)
+    {
+    case FailureReason::NetworkNotFound:
+        return "network-not-found";
+    case FailureReason::WrongPassword:
+        return "wrong-password";
+    case FailureReason::Timeout:
+        return "timeout";
+    case FailureReason::ConnectionLost:
+        return "connection-lost";
+    default:
+        return "other";
+    }
+}
+
 }  // namespace
 
 bool ProvisioningPortal::setSsid(const std::string& ssid)
@@ -122,6 +157,15 @@ void ProvisioningPortal::process()
     if (state_ == PortalState::Active)
     {
         http_.handle();
+        followTrial();
+        if (closing_)
+        {
+            if (clock_.nowMs() >= closeAtMs_)
+            {
+                close();
+            }
+            return;
+        }
         if (timeoutMs_ > 0 && clock_.nowMs() - lastActivityMs_ >= timeoutMs_)
         {
             const bool reopen = networks_.count() == 0 && restartOnTimeout_;
@@ -134,7 +178,8 @@ void ProvisioningPortal::process()
             }
             return;
         }
-        if (reason_ == Opened::NotConnecting && connection_.state() == ConnectionState::Connected)
+        if (reason_ == Opened::NotConnecting && result_ != Result::Testing &&
+            connection_.state() == ConnectionState::Connected)
         {
             log_.info("portal", "connected again; closing");
             close();
@@ -216,6 +261,8 @@ void ProvisioningPortal::bringUp(uint8_t channel)
 
 void ProvisioningPortal::close()
 {
+    closing_ = false;
+    result_ = Result::None;
     if (dnsRunning_)
     {
         http_.stopCaptiveDns();
@@ -262,6 +309,22 @@ void ProvisioningPortal::registerRoutes()
                  if (accept(request))
                  {
                      sendScan(request);
+                 }
+             });
+    http_.on(HttpMethod::Post, "/api/connect",
+             [this](const HttpRequest& request)
+             {
+                 if (accept(request))
+                 {
+                     receiveNetwork(request);
+                 }
+             });
+    http_.on(HttpMethod::Get, "/api/result",
+             [this](const HttpRequest& request)
+             {
+                 if (accept(request))
+                 {
+                     sendResult();
                  }
              });
     // Every other address: the phones' connectivity checks and whatever the Owner typed.
@@ -330,6 +393,129 @@ void ProvisioningPortal::sendScan(const HttpRequest& request)
     }
     json.endArray().endObject();
     http_.send(200, "application/json", json.str());
+}
+
+// POST /api/connect with ssid, password and, to skip the test, saveAnyway=1.
+void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
+{
+    if (result_ == Result::Testing)
+    {
+        sendError(409, "busy");
+        return;
+    }
+    if (closing_)
+    {
+        sendError(409, "done");
+        return;
+    }
+
+    SavedNetwork network;
+    network.ssid = request.arg("ssid").value_or("");
+    network.password = request.arg("password").value_or("");
+    const SavedNetwork::Problem problem = network.validate();
+    if (problem != SavedNetwork::Problem::None)
+    {
+        log_.info("portal", "refused a network: %s", toString(problem));
+        sendError(400, code(problem));
+        return;
+    }
+
+    resultSsid_ = network.ssid;
+    resultFailure_ = FailureReason::None;
+    resultIp_ = Ipv4Address();
+    if (request.arg("saveAnyway").value_or("") == "1")
+    {
+        if (!networks_.save(network))
+        {
+            sendError(500, "not-saved");
+            return;
+        }
+        log_.info("portal", "saved %s without testing it", network.ssid.c_str());
+        result_ = Result::Saved;
+        provisioned(network.ssid);
+    }
+    else
+    {
+        log_.info("portal", "testing %s", network.ssid.c_str());
+        candidate_ = network;
+        result_ = Result::Testing;
+        connection_.tryNetwork(network);
+    }
+    sendResult();
+}
+
+void ProvisioningPortal::followTrial()
+{
+    if (result_ != Result::Testing)
+    {
+        return;
+    }
+    // A test takes up to 20 s and can drop the Owner's phone for a while; that isn't
+    // inactivity.
+    lastActivityMs_ = clock_.nowMs();
+    switch (connection_.trial())
+    {
+    case WifiConnection::Trial::Connected:
+        resultIp_ = wifi_.localIp();
+        connection_.endTrial();
+        if (!networks_.save(candidate_))
+        {
+            result_ = Result::Failed;
+            resultFailure_ = FailureReason::Other;
+            log_.error("portal", "%s works but couldn't be saved", candidate_.ssid.c_str());
+            break;
+        }
+        result_ = Result::Connected;
+        provisioned(candidate_.ssid);
+        break;
+    case WifiConnection::Trial::Failed:
+        result_ = Result::Failed;
+        resultFailure_ = connection_.trialFailure();
+        connection_.endTrial();
+        break;
+    default:
+        break;
+    }
+    // The password isn't needed any more.
+    if (result_ != Result::Testing)
+    {
+        candidate_ = SavedNetwork();
+    }
+}
+
+void ProvisioningPortal::provisioned(const std::string& ssid)
+{
+    events_.raiseProvisioningCompleted(ssid);
+    closing_ = true;
+    closeAtMs_ = clock_.nowMs() + kCloseDelayMs;
+}
+
+void ProvisioningPortal::sendResult()
+{
+    static const char* const kStates[] = {"idle", "testing", "connected", "failed", "saved"};
+    JsonWriter json;
+    json.beginObject().key("state").string(kStates[static_cast<int>(result_)]);
+    if (result_ != Result::None)
+    {
+        json.key("ssid").string(resultSsid_);
+    }
+    if (result_ == Result::Connected)
+    {
+        json.key("ip").string(resultIp_.toString());
+    }
+    if (result_ == Result::Failed)
+    {
+        json.key("reason").string(code(resultFailure_));
+    }
+    json.endObject();
+    http_.send(200, "application/json", json.str());
+}
+
+void ProvisioningPortal::sendError(int status, const char* error)
+{
+    JsonWriter json;
+    json.beginObject().key("error").string(error).endObject();
+    http_.send(status, "application/json", json.str());
 }
 
 std::string ProvisioningPortal::pageUrl() const

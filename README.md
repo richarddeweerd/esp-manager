@@ -2,7 +2,7 @@
 
 EspManager is an Arduino library for ESP32 devices. It gets a device onto Wi-Fi and lets people set it up, manage it and keep it up to date without reflashing over USB.
 
-> **Status: early development.** There is no usable code yet. The API shown below is the intended design and will change before `1.0.0`.
+> **Status: early development.** Connecting and setup through the Provisioning Portal work; the rest is still being built. The API will change before `1.0.0`.
 
 ## Planned features
 
@@ -40,7 +40,9 @@ void loop()
 }
 ```
 
-After a restart the device connects to its Saved Network by itself. Until the Provisioning Portal exists, a sketch can save one directly, and check where the connection stands:
+On a new device the Owner sets up Wi-Fi from a phone: join the device's access point, pick the network on the page that opens, enter its password. The device tests the network before it saves it; if the test fails, the page says why and offers to try again or to save it anyway (for a network that's out of range right now). `onProvisioningCompleted` reports the saved network, and the portal closes 30 seconds later. Testing runs the access point and the station connection at the same time, so the access point may move to the router's channel and drop the phone for a moment; the page warns about this and picks up the result once the phone is back.
+
+After a restart the device connects to its Saved Network by itself. A sketch can also save one directly, and check where the connection stands:
 
 ```cpp
 esp.networks().save("Home", "wifi password");  // stored in NVS; replaces the previous one
