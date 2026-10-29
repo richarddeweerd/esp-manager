@@ -32,6 +32,8 @@ struct HttpRequest
     // Query and form arguments. A body that isn't a form arrives as the argument "plain".
     Fields args;
     Fields headers;
+    // The device's address the request came in on: the station's or the access point's.
+    Ipv4Address localIp;
 
     std::optional<std::string> arg(const std::string& name) const
     {

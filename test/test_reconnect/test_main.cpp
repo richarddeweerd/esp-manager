@@ -8,6 +8,7 @@
 using espmgr::ConnectionState;
 using espmgr::FailureReason;
 using espmgr::FakePlatform;
+using espmgr::NetworkScanner;
 using espmgr::SavedNetwork;
 using espmgr::ScanResult;
 using espmgr::WifiConnection;
@@ -154,14 +155,20 @@ void test_connects_without_a_scan_when_it_cannot_start()
     TEST_ASSERT_EQUAL(1, fakes.wifi.connectCalls.size());
 }
 
-void test_scan_that_never_finishes_times_out()
+void test_scan_that_never_finishes_is_given_up()
 {
     Device d;
-    d.fakes.clock.advance(WifiConnection::kAttemptTimeoutMs);
+    d.fakes.clock.advance(NetworkScanner::kScanTimeoutMs);
+    d.esp.process();
+    // Without results it tries the first network by priority, as for a hidden network.
+    TEST_ASSERT_EQUAL(ConnectionState::Connecting, d.esp.state());
+    TEST_ASSERT_EQUAL(1, d.fakes.wifi.connectCalls.size());
+
+    // The scan counts towards the attempt's time.
+    d.fakes.clock.advance(WifiConnection::kAttemptTimeoutMs - NetworkScanner::kScanTimeoutMs);
     d.esp.process();
     TEST_ASSERT_EQUAL(ConnectionState::Waiting, d.esp.state());
     TEST_ASSERT_EQUAL(FailureReason::Timeout, d.esp.lastFailure());
-    TEST_ASSERT_EQUAL(0, d.fakes.wifi.connectCalls.size());
 }
 
 void test_networks_cleared_during_the_scan_go_idle()
@@ -183,7 +190,8 @@ void test_base_delay_doubles_up_to_the_maximum()
                                  64000, 128000, 256000, 300000, 300000};
     espmgr::Logger log(d.fakes.log, d.fakes.clock);
     espmgr::Events events(log);
-    WifiConnection connection(d.fakes.wifi, d.fakes.clock, d.esp.networks(), events, log);
+    NetworkScanner scanner(d.fakes.wifi, d.fakes.clock, log);
+    WifiConnection connection(d.fakes.wifi, d.fakes.clock, scanner, d.esp.networks(), events, log);
     for (uint32_t failures = 1; failures <= 11; ++failures)
     {
         TEST_ASSERT_EQUAL_UINT64(expected[failures - 1], connection.baseRetryDelay(failures));
@@ -309,7 +317,7 @@ int main()
     RUN_TEST(test_strongest_access_point_of_an_ssid_counts);
     RUN_TEST(test_tries_the_first_network_when_none_is_in_range);
     RUN_TEST(test_connects_without_a_scan_when_it_cannot_start);
-    RUN_TEST(test_scan_that_never_finishes_times_out);
+    RUN_TEST(test_scan_that_never_finishes_is_given_up);
     RUN_TEST(test_networks_cleared_during_the_scan_go_idle);
     RUN_TEST(test_base_delay_doubles_up_to_the_maximum);
     RUN_TEST(test_retries_wait_longer_after_each_failure_in_a_row);

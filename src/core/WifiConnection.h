@@ -3,6 +3,7 @@
 #include "core/Clock.h"
 #include "core/Events.h"
 #include "core/Logger.h"
+#include "core/NetworkScanner.h"
 #include "core/SavedNetworks.h"
 #include "core/WifiDriver.h"
 
@@ -32,9 +33,10 @@ public:
     static constexpr uint32_t kDefaultMinRetryDelayMs = 1000;
     static constexpr uint32_t kDefaultMaxRetryDelayMs = 5 * 60 * 1000;
 
-    WifiConnection(WifiDriver& wifi, Clock& clock, const SavedNetworks& networks, Events& events,
-                   Logger& log)
-        : wifi_(wifi), clock_(clock), networks_(networks), events_(events), log_(log)
+    WifiConnection(WifiDriver& wifi, Clock& clock, NetworkScanner& scanner,
+                   const SavedNetworks& networks, Events& events, Logger& log)
+        : wifi_(wifi), clock_(clock), scanner_(scanner), networks_(networks), events_(events),
+          log_(log)
     {
     }
 
@@ -89,6 +91,7 @@ private:
 
     WifiDriver& wifi_;
     Clock& clock_;
+    NetworkScanner& scanner_;
     const SavedNetworks& networks_;
     Events& events_;
     Logger& log_;

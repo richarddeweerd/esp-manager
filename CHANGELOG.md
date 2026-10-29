@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- Provisioning Portal: opens by itself without a Saved Network, or with `esp.startPortal()`; `esp.stopPortal()`, `esp.portalState()` and the settings on `esp.portal()` (SSID, WPA2 password, inactivity timeout, reopening, opening after failing to connect). A scan first puts the access point on the channel of the strongest Saved or visible network, and the pages answer only on the access point. Scans are shared by the connection and the portal (#12).
 - Web page pipeline: page sources in `src/web/`, their text in `src/web/strings.en.json`, and `scripts/build-web.py`, which inlines and gzips each page into a committed header so it's served straight from flash (#11).
 - Library skeleton: PlatformIO and Arduino library layout, `EspManager` class with `begin()` and `process()` (no behaviour yet), `examples/Basic` and host unit tests.
 - Hardware interfaces `WifiDriver`, `Storage`, `Clock` and `HttpServer`, with ESP32 implementations (Wi-Fi, NVS, `esp_timer`, `WebServer`/`DNSServer`) and fakes for the host tests. `EspManager` can be given other implementations for testing (#3).

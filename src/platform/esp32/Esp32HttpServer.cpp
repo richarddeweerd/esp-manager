@@ -125,6 +125,8 @@ HttpRequest Esp32HttpServer::currentRequest() const
     HttpRequest request;
     request.method = fromArduino(server_->method());
     request.path = toStd(server_->uri());
+    const IPAddress local = server_->client().localIP();
+    request.localIp = Ipv4Address(local[0], local[1], local[2], local[3]);
     for (int i = 0; i < server_->args(); ++i)
     {
         request.args.emplace_back(toStd(server_->argName(i)), toStd(server_->arg(i)));

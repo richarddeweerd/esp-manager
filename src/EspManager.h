@@ -4,6 +4,9 @@
 #include "core/DeviceName.h"
 #include "core/Events.h"
 #include "core/Logger.h"
+#include "core/NetworkScanner.h"
+#include "core/Platform.h"
+#include "core/ProvisioningPortal.h"
 #include "core/SavedNetworkStore.h"
 #include "core/SavedNetworks.h"
 #include "core/WifiConnection.h"
@@ -15,7 +18,7 @@
 namespace espmgr
 {
 
-struct Platform;
+class Esp32Platform;
 struct EspManagerTestAccess;
 
 // The library's single entry point: call begin() from setup() and process() from loop().
@@ -68,6 +71,17 @@ public:
     // will use too. Returns false, changing nothing, if the resulting name isn't valid.
     bool setNamePrefix(const std::string& prefix);
 
+    // Opens the Provisioning Portal, also when there are Saved Networks, for example from the
+    // Developer's own button. It opens by itself only when there's no Saved Network. Returns at
+    // once; onPortalStarted reports when the access point is up. Settings are on portal().
+    void startPortal();
+    // Closes the Provisioning Portal.
+    void stopPortal();
+    // Off or Active.
+    PortalState portalState() const;
+    // The Provisioning Portal's settings, for example `esp.portal().setPassword("12345678");`.
+    ProvisioningPortal& portal();
+
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();
@@ -99,15 +113,22 @@ private:
     // How long waitForConnection() pauses between process() calls.
     static constexpr uint32_t kWaitStepMs = 10;
 
-    // Owns the ESP32 hardware objects when the default constructor made them. Type-erased, so
-    // this header doesn't depend on the ESP32 code.
-    std::shared_ptr<void> ownedPlatform_;
+    explicit EspManager(std::shared_ptr<Esp32Platform> owned);
+    // Used by the default constructor, which keeps the ESP32 hardware objects in `owned`.
+    EspManager(std::shared_ptr<Esp32Platform> owned, Platform& platform);
+
+    // Owns the ESP32 hardware objects when the default constructor made them.
+    std::shared_ptr<Esp32Platform> ownedPlatform_;
     Platform& platform_;
-    Logger log_;
+    Logger log_{platform_.log, platform_.clock};
     Events events_{log_};
-    SavedNetworkStore store_;
+    SavedNetworkStore store_{platform_.storage, log_};
     SavedNetworks networks_{store_, log_};
-    WifiConnection connection_;
+    NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
+    WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
+    ProvisioningPortal portal_{platform_.wifi, platform_.http, platform_.clock,
+                               scanner_,       networks_,      connection_,
+                               events_,        log_,           [this] { return hostname(); }};
     std::string namePrefix_ = kDefaultNamePrefix;
     std::string hostname_;  // empty: the default name
     bool begun_ = false;

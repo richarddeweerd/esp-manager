@@ -25,7 +25,7 @@ void WifiConnection::process()
         const bool timedOut = clock_.nowMs() - attemptStartedMs_ >= kAttemptTimeoutMs;
         if (scanning_)
         {
-            if (wifi_.scanComplete())
+            if (!scanner_.busy())
             {
                 scanning_ = false;
                 if (networks_.count() == 0)
@@ -33,7 +33,7 @@ void WifiConnection::process()
                     setState(ConnectionState::Idle);
                     break;
                 }
-                connectTo(choose(networks_.list(), wifi_.scanResults()));
+                connectTo(choose(networks_.list(), scanner_.results()));
             }
             else if (timedOut)
             {
@@ -155,7 +155,7 @@ void WifiConnection::startAttempt()
 {
     attemptStartedMs_ = clock_.nowMs();
     setState(ConnectionState::Connecting);
-    scanning_ = wifi_.startScan();
+    scanning_ = scanner_.start();
     if (!scanning_)
     {
         log_.debug("wifi", "scan didn't start; connecting without one");
