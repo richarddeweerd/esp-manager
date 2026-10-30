@@ -303,6 +303,21 @@ void test_saved_networks_survive_nvs()
     }
 }
 
+// Last, since it erases all of NVS while the station is connected, as a Factory Reset does
+// before it restarts (#19).
+void test_storage_erase_all_empties_every_namespace()
+{
+    TEST_ASSERT_TRUE(hw.storage.putString(kNamespace, "greeting", "hello"));
+    TEST_ASSERT_TRUE(hw.storage.putU32("espmgr-hwtest2", "count", 7));
+    TEST_ASSERT_TRUE(hw.storage.eraseAll());
+    TEST_ASSERT_FALSE(hw.storage.getString(kNamespace, "greeting").has_value());
+    TEST_ASSERT_FALSE(hw.storage.getU32("espmgr-hwtest2", "count").has_value());
+    // Still usable afterwards.
+    TEST_ASSERT_TRUE(hw.storage.putString(kNamespace, "greeting", "again"));
+    TEST_ASSERT_EQUAL_STRING("again", hw.storage.getString(kNamespace, "greeting").value().c_str());
+    hw.storage.clear(kNamespace);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -324,6 +339,7 @@ void setup()
     RUN_TEST(test_storage_remove_and_clear);
     RUN_TEST(test_storage_reads_nothing_from_a_missing_namespace);
     RUN_TEST(test_saved_networks_survive_nvs);
+    RUN_TEST(test_storage_erase_all_empties_every_namespace);
     UNITY_END();
 
     hw.wifi.disconnect();

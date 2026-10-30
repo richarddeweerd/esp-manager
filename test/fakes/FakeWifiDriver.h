@@ -29,6 +29,7 @@ public:
 
     void disconnect() override
     {
+        ++disconnectCalls;
         status_ = StationStatus::Disconnected;
     }
 
@@ -176,6 +177,7 @@ public:
     // --- Recorded for the test ---
 
     std::vector<ConnectCall> connectCalls;
+    int disconnectCalls = 0;
     int scansStarted = 0;
     bool accessPointActive = false;
     std::string accessPointSsid;

@@ -145,6 +145,12 @@ void ManagementInterface::process()
     {
         return;
     }
+    if (pending_ && clock_.nowMs() >= actionAtMs_)
+    {
+        const std::function<void()> action = std::move(pending_);
+        pending_ = nullptr;
+        action();
+    }
     const bool wanted = hasPassword() && connection_.state() == ConnectionState::Connected;
     if (wanted != active())
     {
@@ -184,6 +190,33 @@ void ManagementInterface::registerRoutes()
                    {
                        sendNetworks();
                    }
+               });
+    registerAction("/api/restart", "restart", &Actions::restart);
+    registerAction("/api/network-reset", "Network Reset", &Actions::networkReset);
+    registerAction("/api/factory-reset", "Factory Reset", &Actions::factoryReset);
+}
+
+void ManagementInterface::registerAction(const char* path, const char* name,
+                                         std::function<void()> Actions::* action)
+{
+    routes_.on(WebRoutes::Site::Management, HttpMethod::Post, path,
+               [this, name, action](const HttpRequest& request)
+               {
+                   if (!authorize(request))
+                   {
+                       return;
+                   }
+                   HttpServer& http = routes_.http();
+                   if (request.header("X-Requested-With").value_or("") != "EspManager")
+                   {
+                       log_.warn("mgmt", "refused %s without X-Requested-With", name);
+                       http.send(403, "text/plain", "Use the management page.");
+                       return;
+                   }
+                   log_.info("mgmt", "%s requested", name);
+                   pending_ = actions_.*action;
+                   actionAtMs_ = clock_.nowMs() + kActionDelayMs;
+                   http.send(200, "application/json", "{\"ok\":true}");
                });
 }
 

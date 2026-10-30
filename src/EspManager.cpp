@@ -31,6 +31,15 @@ void EspManager::begin()
 
 void EspManager::process()
 {
+    if (restartPending_ && platform_.clock.nowMs() >= restartAtMs_)
+    {
+        restartPending_ = false;
+        log_.info("core", "restarting");
+        // A board reset while associated makes some access points refuse it for a while.
+        platform_.wifi.disconnect();
+        platform_.system.restart();
+        return;
+    }
     // The parts do their work first; listeners then see the result. The scanner goes first, so
     // the others see a scan that has just finished.
     scanner_.process();
@@ -167,6 +176,45 @@ PortalState EspManager::portalState() const
 ProvisioningPortal& EspManager::portal()
 {
     return portal_;
+}
+
+bool EspManager::networkReset()
+{
+    log_.info("core", "Network Reset");
+    const bool erased = networks_.clear();
+    if (!erased)
+    {
+        log_.error("core", "couldn't erase the Saved Networks");
+    }
+    connection_.forget();
+    return erased;
+}
+
+bool EspManager::settingsReset()
+{
+    log_.info("core", "Settings Reset: no Settings yet");
+    return true;
+}
+
+bool EspManager::factoryReset()
+{
+    log_.warn("core", "Factory Reset: erasing everything and restarting");
+    const bool erased = platform_.storage.eraseAll();
+    if (!erased)
+    {
+        log_.error("core", "couldn't erase the storage");
+    }
+    networks_.load();
+    management_.begin();
+    connection_.forget();
+    restart();
+    return erased;
+}
+
+void EspManager::restart()
+{
+    restartPending_ = true;
+    restartAtMs_ = platform_.clock.nowMs() + kRestartDelayMs;
 }
 
 ManagementInterface& EspManager::management()

@@ -2,6 +2,7 @@
 
 #include <Preferences.h>
 #include <nvs.h>
+#include <nvs_flash.h>
 
 namespace espmgr
 {
@@ -159,6 +160,13 @@ bool NvsStorage::clear(const std::string& ns)
 {
     Session session(ns, false);
     return session.isOpen() && session.prefs().clear();
+}
+
+// The whole default NVS partition, as nvs_flash_erase() leaves it, ready for use again. Open
+// handles, such as the Wi-Fi driver's, stop working; the device restarts after a Factory Reset.
+bool NvsStorage::eraseAll()
+{
+    return nvs_flash_erase() == ESP_OK && nvs_flash_init() == ESP_OK;
 }
 
 }  // namespace espmgr

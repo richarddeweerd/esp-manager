@@ -5,10 +5,10 @@
 // access point, so it checks from the test network that the portal refuses it there and that the
 // captive DNS server answers every name with the access point's address (#13), the status
 // against what the Wi-Fi library and the chip report (#16), and the Management Interface, which
-// the rig logs in to with Digest over the test network (#17).
+// the rig logs in to with Digest over the test network (#17), and a Network Reset at the end
+// (#19), so the test network is forgotten afterwards.
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
-// The test network stays saved on the board afterwards, as it would after setup.
 
 #include <Arduino.h>
 #include <EspManager.h>
@@ -292,6 +292,19 @@ void test_management_interface_logs_the_host_in()
     TEST_ASSERT_EQUAL_STRING("ok", answer.substr(10).c_str());
 }
 
+void test_network_reset_leaves_and_opens_the_portal()
+{
+    HOSTLINK_REQUIRE_NETWORK();
+    TEST_ASSERT_TRUE(esp.networkReset());
+    TEST_ASSERT_EQUAL_UINT32(0, esp.networks().count());
+    TEST_ASSERT_EQUAL_STRING("Idle", name(esp.state()));
+    TEST_ASSERT_TRUE_MESSAGE(waitForPortal(PortalState::Active), "portal didn't open in 10 s");
+    TEST_ASSERT_NOT_EQUAL(WL_CONNECTED, WiFi.status());
+    TEST_ASSERT_EQUAL_STRING("Idle", name(esp.state()));
+    esp.stopPortal();
+    TEST_ASSERT_TRUE(waitForPortal(PortalState::Off));
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -322,6 +335,7 @@ void setup()
     RUN_TEST(test_stop_portal_closes_the_access_point);
     RUN_TEST(test_portal_password_makes_the_access_point_wpa2);
     RUN_TEST(test_management_interface_logs_the_host_in);
+    RUN_TEST(test_network_reset_leaves_and_opens_the_portal);
     UNITY_END();
     clearManagementPassword();
 

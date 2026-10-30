@@ -43,6 +43,10 @@ public:
     // Both return true if the key or namespace is gone afterwards, also if it never existed.
     virtual bool remove(const std::string& ns, const std::string& key) = 0;
     virtual bool clear(const std::string& ns) = 0;
+
+    // Erases every namespace, the Developer's own and the Wi-Fi library's included, for a
+    // Factory Reset. Restart afterwards.
+    virtual bool eraseAll() = 0;
 };
 
 }  // namespace espmgr

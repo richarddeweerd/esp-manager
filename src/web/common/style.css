@@ -50,6 +50,7 @@ button, input { font: inherit; color: inherit; }
 .btn.secondary { background: var(--surface-2); color: var(--text); border-color: var(--line); }
 .btn.link { background: none; color: var(--accent); padding: 8px 4px; min-height: 0; }
 .btn.block { width: 100%; }
+.btn.danger { background: var(--bad); color: var(--accent-text); }
 
 .field { display: grid; gap: 6px; margin: 12px 0; }
 .field label { font-size: 14px; color: var(--muted); }
