@@ -98,6 +98,29 @@ void WifiConnection::process()
     }
 }
 
+void WifiConnection::forget()
+{
+    if (trial_ == Trial::Running)
+    {
+        trial_ = Trial::Failed;
+        trialFailure_ = FailureReason::Other;
+    }
+    scanning_ = false;
+    failuresInARow_ = 0;
+    if (state_ == ConnectionState::Idle)
+    {
+        return;
+    }
+    const bool wasConnected = state_ == ConnectionState::Connected;
+    wifi_.disconnect();
+    log_.info("wifi", "left %s", ssid_.c_str());
+    setState(ConnectionState::Idle);
+    if (wasConnected)
+    {
+        events_.raiseDisconnected(FailureReason::None);
+    }
+}
+
 bool WifiConnection::setRetryDelays(uint32_t minMs, uint32_t maxMs)
 {
     if (minMs == 0 || maxMs < minMs)

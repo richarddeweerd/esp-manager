@@ -81,6 +81,12 @@ public:
         return true;
     }
 
+    bool eraseAll() override
+    {
+        data.clear();
+        return true;
+    }
+
     // When false, every put fails, as when the NVS partition is full.
     bool writable = true;
 

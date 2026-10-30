@@ -26,9 +26,25 @@ namespace espmgr
 // stored password useless, and the Owner sets it again through the Provisioning Portal.
 //
 // It answers while the station is connected, on port 80, and only on the station's address.
+//
+// The Device tab restarts the device and starts a Network Reset or a Factory Reset (EP09). These
+// are POST requests that must also carry the header `X-Requested-With: EspManager`: another
+// web site can't add it, so it can't trigger them through the Owner's browser, which may
+// remember the password. Each runs a moment after its answer has gone out.
 class ManagementInterface
 {
 public:
+    // What the Device tab can do; EspManager fills these in.
+    struct Actions
+    {
+        std::function<void()> restart;
+        std::function<void()> networkReset;
+        std::function<void()> factoryReset;
+    };
+
+    // How long an action waits after its answer.
+    static constexpr uint64_t kActionDelayMs = 1000;
+
     static constexpr const char* kDefaultUser = "admin";
     static constexpr const char* kStorageNamespace = "espmgr-mgmt";
 
@@ -36,9 +52,10 @@ public:
     ManagementInterface(WebRoutes& routes, Storage& storage, Clock& clock,
                         WifiConnection& connection, SavedNetworks& networks, Logger& log,
                         std::function<std::string()> deviceName,
-                        std::function<DeviceStatus()> status)
-        : routes_(routes), storage_(storage), connection_(connection), networks_(networks),
-          log_(log), deviceName_(std::move(deviceName)), status_(std::move(status)), auth_(clock)
+                        std::function<DeviceStatus()> status, Actions actions)
+        : routes_(routes), storage_(storage), clock_(clock), connection_(connection),
+          networks_(networks), log_(log), deviceName_(std::move(deviceName)),
+          status_(std::move(status)), actions_(std::move(actions)), auth_(clock)
     {
     }
 
@@ -96,15 +113,20 @@ private:
     // challenge itself.
     bool authorize(const HttpRequest& request);
     void sendNetworks();
+    // POST /api/restart, /api/network-reset and /api/factory-reset.
+    void registerAction(const char* path, const char* name,
+                        std::function<void()> Actions::* action);
     std::string storedId() const;
 
     WebRoutes& routes_;
     Storage& storage_;
+    Clock& clock_;
     WifiConnection& connection_;
     SavedNetworks& networks_;
     Logger& log_;
     std::function<std::string()> deviceName_;
     std::function<DeviceStatus()> status_;
+    Actions actions_;
     DigestAuth auth_;
 
     bool enabled_ = false;
@@ -113,6 +135,9 @@ private:
     std::string realm_;  // empty: the hostname
     // The stored hash, if it belongs to the current user and realm; empty otherwise.
     std::string ha1_;
+    // The action asked for, run at actionAtMs_.
+    std::function<void()> pending_;
+    uint64_t actionAtMs_ = 0;
 };
 
 }  // namespace espmgr

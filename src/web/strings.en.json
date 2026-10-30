@@ -53,7 +53,8 @@
     "other": "Something went wrong.",
     "management-password-invalid": "A management password has 8 to 63 characters: letters, digits, spaces and the usual symbols.",
     "management-password-mismatch": "The two passwords aren't the same.",
-    "unreachableManagement": "Couldn't reach the device. The values below may be out of date."
+    "unreachableManagement": "Couldn't reach the device. The values below may be out of date.",
+    "actionFailed": "The device didn't accept this. Reload the page and try again."
   },
   "status": "Status",
   "loading": "Loading…",
@@ -88,5 +89,28 @@
   "savedNetworks": "Saved networks",
   "noSavedNetworks": "No saved networks.",
   "details": "Details",
-  "device": "Device"
+  "device": "Device",
+  "maintenance": "Maintenance",
+  "cancel": "Cancel",
+  "close": "Close",
+  "actions": {
+    "restart": {
+      "title": "Restart",
+      "confirm": "The device restarts and is back on the network after a few seconds. Its settings are kept.",
+      "button": "Restart",
+      "done": "The device is restarting. Reload this page in a few seconds."
+    },
+    "networkReset": {
+      "title": "Network Reset",
+      "confirm": "The device forgets every Wi-Fi network it knows and leaves this one. To use it again, join its own Wi-Fi network and set it up from there. Everything else is kept.",
+      "button": "Forget networks",
+      "done": "The device has left this network. Join its setup Wi-Fi network to connect it again."
+    },
+    "factoryReset": {
+      "title": "Factory Reset",
+      "confirm": "Everything stored on the device is erased: Wi-Fi networks, the management password and all other settings. It then restarts as if new. This can't be undone.",
+      "button": "Erase everything",
+      "done": "The device is erasing everything and restarting. Join its setup Wi-Fi network to set it up again."
+    }
+  }
 }

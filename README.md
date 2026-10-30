@@ -88,6 +88,17 @@ esp.begin();
 
 The Provisioning Portal then asks the Owner for the management password, which is stored when setup completes. Until a password is stored, the Management Interface stays off. If the Owner enters the password some other way, over serial or Bluetooth for example, store it with `esp.management().setPassword(password)`. Never hard-code a password in the firmware: every device would share it. Only the HTTP Digest hash of the password is stored, and it includes the user and realm, so changing either means the Owner has to set the password again through the Provisioning Portal.
 
+Three resets, for your own buttons or menus, and a restart:
+
+```cpp
+esp.networkReset();    // forget every Saved Network and leave; the Provisioning Portal opens again
+esp.settingsReset();   // Settings back to their defaults (no Settings yet, so nothing for now)
+esp.factoryReset();    // erase everything stored, your own Preferences included, and restart
+esp.restart();         // restart a moment later, from process()
+```
+
+The Management Interface's Device tab offers the restart, the Network Reset and the Factory Reset, each after a confirmation. The library reads no buttons itself; [examples/Button](examples/Button) shows how to wire one up.
+
 Your own code can scan too, without blocking: `esp.startScan()`, then once `esp.scanComplete()` is true, `esp.scanResults()` gives the same cleaned-up list as the setup page (SSID, signal in dBm, channel and whether it's secured).
 
 The library is silent by default. To see what it does, start `Serial` and pick a log level (`Error`, `Warn`, `Info`, `Debug` or `Verbose`):

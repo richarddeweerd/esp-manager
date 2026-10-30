@@ -93,6 +93,25 @@ public:
     // The Provisioning Portal's settings, for example `esp.portal().setPassword("12345678");`.
     ProvisioningPortal& portal();
 
+    // --- Resets (EP09) ---
+
+    // Network Reset: forgets every Saved Network and leaves the network, keeping everything
+    // else. The Provisioning Portal then opens, as on a new device. Returns false if the Saved
+    // Networks couldn't be erased.
+    bool networkReset();
+
+    // Settings Reset: returns every Setting to its default, keeping the Saved Networks. There
+    // are no Settings yet, so it does nothing for now.
+    bool settingsReset();
+
+    // Factory Reset: erases everything stored on the device (all of NVS, so the sketch's own
+    // Preferences too) and restarts it, so it starts as if new. Returns false if erasing failed;
+    // it restarts anyway.
+    bool factoryReset();
+
+    // Restarts the device, from process() a moment later, so a pending answer still goes out.
+    void restart();
+
     // The Management Interface, off by default: `esp.management().enable();` before begin()
     // turns it on, and the Owner chooses its password in the Provisioning Portal.
     ManagementInterface& management();
@@ -136,6 +155,8 @@ private:
 
     // How long waitForConnection() pauses between process() calls.
     static constexpr uint32_t kWaitStepMs = 10;
+    // restart() waits this long, so answers and log lines still go out.
+    static constexpr uint32_t kRestartDelayMs = 500;
 
     explicit EspManager(std::shared_ptr<Esp32Platform> owned);
     // Used by the default constructor, which keeps the ESP32 hardware objects in `owned`.
@@ -151,14 +172,16 @@ private:
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
     WebRoutes routes_{platform_.wifi, platform_.http};
-    ManagementInterface management_{routes_,
-                                    platform_.storage,
-                                    platform_.clock,
-                                    connection_,
-                                    networks_,
-                                    log_,
-                                    [this] { return hostname(); },
-                                    [this] { return status(); }};
+    ManagementInterface management_{
+        routes_,
+        platform_.storage,
+        platform_.clock,
+        connection_,
+        networks_,
+        log_,
+        [this] { return hostname(); },
+        [this] { return status(); },
+        {[this] { restart(); }, [this] { networkReset(); }, [this] { factoryReset(); }}};
     ProvisioningPortal portal_{platform_.wifi,
                                routes_,
                                platform_.clock,
@@ -174,6 +197,8 @@ private:
     std::string hostname_;  // empty: the default name
     std::string firmwareVersion_;
     bool begun_ = false;
+    bool restartPending_ = false;
+    uint64_t restartAtMs_ = 0;
 };
 
 }  // namespace espmgr

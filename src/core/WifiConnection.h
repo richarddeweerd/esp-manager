@@ -86,6 +86,10 @@ public:
         return lastFailure_;
     }
 
+    // Leaves the network and goes Idle, for a Network Reset. A running trial fails. Raises
+    // disconnected with FailureReason::None if the device was connected.
+    void forget();
+
     // Stops what the connection is doing and makes one attempt at `network`, without a scan and
     // without saving it. trial() tells how it went.
     void tryNetwork(const SavedNetwork& network);

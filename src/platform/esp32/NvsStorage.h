@@ -25,6 +25,7 @@ public:
 
     bool remove(const std::string& ns, const std::string& key) override;
     bool clear(const std::string& ns) override;
+    bool eraseAll() override;
 };
 
 }  // namespace espmgr

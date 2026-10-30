@@ -5,7 +5,7 @@
 namespace espmgr
 {
 
-// A System that reports what the test sets.
+// A System that reports what the test sets and counts restarts, which change nothing else.
 class FakeSystem : public System
 {
 public:
@@ -19,8 +19,14 @@ public:
         return chip;
     }
 
+    void restart() override
+    {
+        ++restarts;
+    }
+
     uint32_t heap = 180000;
     std::string chip = "ESP32-C3 rev 4";
+    int restarts = 0;
 };
 
 }  // namespace espmgr
