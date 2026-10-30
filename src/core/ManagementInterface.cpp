@@ -183,14 +183,10 @@ void ManagementInterface::registerRoutes()
                        routes_.http().send(200, "application/json", json.str());
                    }
                });
-    routes_.on(Site::Management, HttpMethod::Get, "/api/networks",
-               [this](const HttpRequest& request)
-               {
-                   if (authorize(request))
-                   {
-                       sendNetworks();
-                   }
-               });
+    // Removing the last Saved Network here would be a Network Reset, which has its own button.
+    networksApi_.registerRoutes(Site::Management,
+                                [this](const HttpRequest& request) { return authorize(request); },
+                                {/*add=*/true, /*removeLast=*/false});
     registerAction("/api/restart", "restart", &Actions::restart);
     registerAction("/api/network-reset", "Network Reset", &Actions::networkReset);
     registerAction("/api/factory-reset", "Factory Reset", &Actions::factoryReset);
@@ -238,24 +234,6 @@ bool ManagementInterface::authorize(const HttpRequest& request)
                     auth_.challenge(realm(), check == DigestAuth::Check::Stale));
     http.send(401, "text/plain", "Log in to manage this device.");
     return false;
-}
-
-// The Saved Networks, without their passwords.
-void ManagementInterface::sendNetworks()
-{
-    JsonWriter json;
-    json.beginObject().key("connected").string(connection_.ssid()).key("networks").beginArray();
-    for (const SavedNetwork& network : networks_.list())
-    {
-        json.beginObject()
-            .key("ssid")
-            .string(network.ssid)
-            .key("priority")
-            .number(network.priority)
-            .endObject();
-    }
-    json.endArray().endObject();
-    routes_.http().send(200, "application/json", json.str());
 }
 
 }  // namespace espmgr

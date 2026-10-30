@@ -5,8 +5,9 @@
 // access point, so it checks from the test network that the portal refuses it there and that the
 // captive DNS server answers every name with the access point's address (#13), the status
 // against what the Wi-Fi library and the chip report (#16), and the Management Interface, which
-// the rig logs in to with Digest over the test network (#17), and a Network Reset at the end
-// (#19), so the test network is forgotten afterwards.
+// the rig logs in to with Digest over the test network (#17), moving between two Saved Networks
+// while the rig switches its access point from one name to the other and back (#21), and a
+// Network Reset at the end (#19), so the test networks are forgotten afterwards.
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
 
@@ -292,6 +293,47 @@ void test_management_interface_logs_the_host_in()
     TEST_ASSERT_EQUAL_STRING("ok", answer.substr(10).c_str());
 }
 
+// Keeps calling process() until connected to `ssid`, for at most `timeoutMs`.
+bool waitForConnectionTo(const std::string& ssid, uint32_t timeoutMs)
+{
+    const uint32_t start = millis();
+    while (millis() - start < timeoutMs)
+    {
+        esp.process();
+        if (esp.state() == ConnectionState::Connected && ssid == WiFi.SSID().c_str())
+        {
+            return true;
+        }
+        delay(10);
+    }
+    return false;
+}
+
+void test_moves_between_two_saved_networks()
+{
+    HOSTLINK_REQUIRE_SECOND_NETWORK();
+    TEST_ASSERT_TRUE(esp.setRetryDelays(1000, 4000));
+    TEST_ASSERT_TRUE(esp.networks().save(hostlink::testSsidB, hostlink::testPassword));
+    TEST_ASSERT_EQUAL(2, esp.networks().count());
+    TEST_ASSERT_EQUAL_STRING(hostlink::testSsidB.c_str(), esp.networks().list()[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Connected", name(esp.state()));
+
+    const auto idle = [] { esp.process(); };
+    const std::string toB = hostlink::ask("ESPMGR-HW SWITCH b", "SWITCH DONE ", 30000, idle);
+    const bool movedToB = toB == "ok" && waitForConnectionTo(hostlink::testSsidB, 60000);
+    // Back to the first name before any check can end the test, so the next tests have it.
+    const std::string toA = hostlink::ask("ESPMGR-HW SWITCH a", "SWITCH DONE ", 30000, idle);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("ok", toB.c_str(), "the host didn't switch to b");
+    TEST_ASSERT_TRUE_MESSAGE(movedToB, "didn't move to the second network within 60 s");
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("ok", toA.c_str(), "the host didn't switch back to a");
+    TEST_ASSERT_TRUE_MESSAGE(waitForConnectionTo(hostlink::testSsid, 60000),
+                             "didn't move back to the first network within 60 s");
+
+    TEST_ASSERT_TRUE(esp.networks().remove(hostlink::testSsidB));
+    TEST_ASSERT_TRUE(esp.setRetryDelays(espmgr::WifiConnection::kDefaultMinRetryDelayMs,
+                                        espmgr::WifiConnection::kDefaultMaxRetryDelayMs));
+}
+
 void test_network_reset_leaves_and_opens_the_portal()
 {
     HOSTLINK_REQUIRE_NETWORK();
@@ -335,6 +377,7 @@ void setup()
     RUN_TEST(test_stop_portal_closes_the_access_point);
     RUN_TEST(test_portal_password_makes_the_access_point_wpa2);
     RUN_TEST(test_management_interface_logs_the_host_in);
+    RUN_TEST(test_moves_between_two_saved_networks);
     RUN_TEST(test_network_reset_leaves_and_opens_the_portal);
     UNITY_END();
     clearManagementPassword();

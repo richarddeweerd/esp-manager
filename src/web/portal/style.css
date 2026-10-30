@@ -18,3 +18,9 @@
 .foot { padding-top: 16px; display: grid; gap: 8px; }
 .center-text { text-align: center; font-size: 13px; margin: 0; }
 .wizard header .btn.link { font-size: 15px; }
+.net.saved { cursor: default; padding: 10px 12px 10px 16px; }
+.net .icon { flex: none; width: 36px; height: 36px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; cursor: pointer; }
+.net .icon:disabled { opacity: .3; cursor: default; }
+.net .icon.bad { color: var(--bad); }
+.net .btn { min-height: 0; padding: 8px 12px; }

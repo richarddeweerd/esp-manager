@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- Several Saved Networks (EP05): up to 5 by default (`esp.networks().setMaxNetworks()`, 1 to 20), tried in the Owner's order, first in range wins. A new network goes to the top and a known SSID is updated in its place; `save()` refuses a new one when the list is full. `esp.networks().remove()`, `move()`, `contains()` and `full()`. `SavedNetwork::priority` is now the network's place in the list. The Provisioning Portal opens on the list of Saved Networks when there are any, where the Owner moves or removes them before adding another; the Management Interface's Wi-Fi tab moves, removes and adds them (without a test). Both sites share `GET /api/networks` and `POST /api/networks/remove`, `/api/networks/move` and, in the Management Interface, `/api/networks/add`; the POST requests need the header `X-Requested-With: EspManager` (#21).
 - An SSID with a NUL byte is refused (`SavedNetwork::Problem::SsidInvalidCharacter`, `ssid-invalid` in the Provisioning Portal), since the Wi-Fi driver would cut it short. Tests now check every Provisioning Portal field, and that no password the device knows appears in any answer of either web site or in the log (#18).
 - `HttpServer` has `sendHeader()` instead of `authenticateDigest()`; the core checks Digest credentials itself (#17).
 

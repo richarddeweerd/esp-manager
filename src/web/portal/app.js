@@ -24,6 +24,14 @@ const S = {
   status: null,
   // The screen the status screen goes back to.
   before: "networks",
+  // The Saved Networks (null until loaded), how many fit, the one waiting for "Remove" to be
+  // confirmed, and why the last change was refused. With Saved Networks the wizard opens on
+  // their list, until the Owner leaves it.
+  saved: null,
+  max: 0,
+  removing: "",
+  listError: "",
+  leftSaved: false,
 };
 
 // How long the page keeps asking for the result while the phone may be off the access point.
@@ -41,6 +49,41 @@ async function loadSetup() {
     // Ask again; without the answer the wizard doesn't know its last step.
     setTimeout(loadSetup, 1500);
   }
+}
+
+async function loadSaved() {
+  try {
+    showSaved(await getJson("/api/networks"));
+  } catch (error) {
+    setTimeout(loadSaved, 1500);
+    return;
+  }
+  if (S.saved.length && S.screen === "networks" && !S.leftSaved) go("list");
+}
+
+function showSaved(data) {
+  S.saved = data.networks;
+  S.max = data.max;
+}
+
+// Sends a change to the list and shows the new one, or why it was refused.
+async function changeSaved(path, fields) {
+  S.removing = "";
+  S.listError = "";
+  try {
+    const answer = await postForm(path, fields);
+    if (answer.ok) showSaved(answer.data);
+    else {
+      S.listError = STRINGS.errors[answer.data.error] || STRINGS.errors.other;
+      if (answer.data.error === "not-found") loadSaved();
+    }
+  } catch (error) {
+    S.listError = STRINGS.errors.unreachable;
+  }
+  if (S.saved.length === 0) {
+    S.leftSaved = true;
+    go("networks");
+  } else render();
 }
 
 // 1 when the wizard has the Management Interface step, 0 otherwise.
@@ -82,6 +125,11 @@ async function submit(saveAnyway) {
   }
   if (!answer.ok) {
     const code = answer.data.error || "";
+    if (code === "full") {
+      S.listError = STRINGS.errors.full;
+      go("list");
+      return;
+    }
     S.error = STRINGS.errors[code] || STRINGS.errors.other;
     go(code === "management-password-invalid" ? "management" : code.startsWith("ssid") ||
       code.startsWith("password") ? "password" : form);
@@ -125,6 +173,32 @@ function lock(secured) {
 }
 
 const screens = {
+  list() {
+    const last = S.saved.length - 1;
+    const items = S.saved.map((network, i) => {
+      const name = `<span class="name">${esc(network.ssid)}</span>`;
+      if (S.removing === network.ssid) {
+        return `<div class="net saved">${name}
+          <button class="btn danger" data-remove="${i}">${esc(STRINGS.remove)}</button>
+          <button class="btn link" data-act="keep">${esc(STRINGS.cancel)}</button></div>`;
+      }
+      return `<div class="net saved"><span class="muted">${i + 1}</span>${name}
+        <button class="icon" data-move="${i}" data-to="${i - 1}" title="${esc(STRINGS.moveUp)}"
+          aria-label="${esc(STRINGS.moveUp)}" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="icon" data-move="${i}" data-to="${i + 1}" title="${esc(STRINGS.moveDown)}"
+          aria-label="${esc(STRINGS.moveDown)}" ${i === last ? "disabled" : ""}>↓</button>
+        <button class="icon bad" data-ask="${i}" title="${esc(STRINGS.remove)}"
+          aria-label="${esc(STRINGS.remove)}">✕</button></div>`;
+    }).join("");
+    const error = S.listError ? `<p class="error">${esc(S.listError)}</p>` : "";
+    const add = S.saved.length >= S.max
+      ? `<p class="muted">${esc(STRINGS.listFull.replace("{max}", S.max))}</p>`
+      : `<button class="btn block" data-act="add">${esc(STRINGS.addNetwork)}</button>`;
+    return [0, `<h2>${esc(STRINGS.savedNetworks)}</h2>
+      <p class="lead">${esc(STRINGS.savedNetworksLead)}</p>
+      <div class="list">${items}</div>${error}<div class="foot">${add}</div>`];
+  },
+
   networks() {
     const items = S.networks.map((network, i) => `<button class="net" data-pick="${i}">
       <span class="name">${esc(network.ssid)}</span>${lock(network.secured)} ${bars(network.rssi)}
@@ -137,7 +211,8 @@ const screens = {
         <button class="net" data-act="other"><span class="name muted">${esc(STRINGS.otherNetwork)}</span></button>
       </div>${status}
       <div class="foot"><button class="btn link" data-act="rescan" ${S.scanning ? "disabled" : ""}>
-        ${esc(STRINGS.scanAgain)}</button></div>`];
+        ${esc(STRINGS.scanAgain)}</button>${S.saved && S.saved.length ? `
+        <button class="btn link" data-act="toSaved">← ${esc(STRINGS.savedNetworks)}</button>` : ""}</div>`];
   },
 
   password() {
@@ -262,6 +337,18 @@ function next() {
 // --- Actions ---
 
 const actions = {
+  add() {
+    S.leftSaved = true;
+    S.listError = "";
+    go("networks");
+  },
+  toSaved() {
+    go("list");
+  },
+  keep() {
+    S.removing = "";
+    render();
+  },
   other() {
     Object.assign(S, { ssid: "", secured: true, hidden: true, password: "", error: "" });
     go("password");
@@ -360,6 +447,25 @@ function check() {
 }
 
 app.addEventListener("click", (event) => {
+  const move = event.target.closest("[data-move]");
+  if (move) {
+    changeSaved("/api/networks/move", {
+      ssid: S.saved[Number(move.dataset.move)].ssid, position: move.dataset.to,
+    });
+    return;
+  }
+  const ask = event.target.closest("[data-ask]");
+  if (ask) {
+    S.removing = S.saved[Number(ask.dataset.ask)].ssid;
+    S.listError = "";
+    render();
+    return;
+  }
+  const remove = event.target.closest("[data-remove]");
+  if (remove) {
+    changeSaved("/api/networks/remove", { ssid: S.saved[Number(remove.dataset.remove)].ssid });
+    return;
+  }
   const pick = event.target.closest("[data-pick]");
   if (pick) {
     const network = S.networks[Number(pick.dataset.pick)];
@@ -383,4 +489,5 @@ app.addEventListener("keydown", (event) => {
 document.title = STRINGS.title;
 render();
 loadSetup();
+loadSaved();
 loadNetworks(false);

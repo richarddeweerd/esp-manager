@@ -46,3 +46,10 @@ button.row:first-child { border-top: 0; }
 .sheet .foot { display: grid; gap: 8px; padding-top: 12px; }
 .sheet .center { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 16px 0; }
 .bigicon { font-size: 44px; line-height: 1; }
+.row .icon { flex: none; width: 36px; height: 36px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; cursor: pointer; }
+.row .icon:disabled { opacity: .3; cursor: default; }
+.row .icon.bad { color: var(--bad); }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2);
+  color: var(--muted); white-space: nowrap; }
+.hint { font-size: 13px; margin: 8px 2px 0; }

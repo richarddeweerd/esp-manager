@@ -14,25 +14,6 @@ namespace
 constexpr size_t kMaxSsidLength = 32;
 
 // The codes the page turns into its own text.
-const char* code(SavedNetwork::Problem problem)
-{
-    switch (problem)
-    {
-    case SavedNetwork::Problem::SsidEmpty:
-        return "ssid-empty";
-    case SavedNetwork::Problem::SsidTooLong:
-        return "ssid-too-long";
-    case SavedNetwork::Problem::SsidInvalidCharacter:
-        return "ssid-invalid";
-    case SavedNetwork::Problem::PasswordTooShort:
-        return "password-too-short";
-    case SavedNetwork::Problem::PasswordTooLong:
-        return "password-too-long";
-    default:
-        return "password-invalid";
-    }
-}
-
 const char* code(FailureReason reason)
 {
     switch (reason)
@@ -334,6 +315,14 @@ void ProvisioningPortal::registerRoutes()
                    seen();
                    sendResult();
                });
+    // The Owner may remove and reorder Saved Networks here; adding goes through /api/connect.
+    networksApi_.registerRoutes(Site::Portal,
+                                [this](const HttpRequest&)
+                                {
+                                    seen();
+                                    return true;
+                                },
+                                {});
     // Every other address: the phones' connectivity checks and whatever the Owner typed.
     routes_.onNotFound(Site::Portal,
                        [this](const HttpRequest&)
@@ -426,7 +415,13 @@ void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
     if (problem != SavedNetwork::Problem::None)
     {
         log_.info("portal", "refused a network: %s", toString(problem));
-        sendError(400, code(problem));
+        sendError(400, errorCode(problem));
+        return;
+    }
+    if (networks_.full() && !networks_.contains(network.ssid))
+    {
+        log_.info("portal", "refused %s: no room for another Saved Network", network.ssid.c_str());
+        sendError(409, "full");
         return;
     }
     std::string managementPassword;

@@ -13,9 +13,18 @@ async function getJson(path) {
   return response.json();
 }
 
+// The header tells the device the request comes from its own page, not from another site.
 async function postForm(path, fields) {
-  const response = await fetch(path, { method: "POST", body: new URLSearchParams(fields) });
-  return { ok: response.ok, data: await response.json() };
+  const response = await fetch(path, {
+    method: "POST", body: new URLSearchParams(fields), headers: { "X-Requested-With": "EspManager" },
+  });
+  let data = {};
+  try {
+    data = await response.json();
+  } catch (error) {
+    // A refusal may come as plain text.
+  }
+  return { ok: response.ok, data };
 }
 
 function bars(rssi) {
