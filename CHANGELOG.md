@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- An SSID with a NUL byte is refused (`SavedNetwork::Problem::SsidInvalidCharacter`, `ssid-invalid` in the Provisioning Portal), since the Wi-Fi driver would cut it short. Tests now check every Provisioning Portal field, and that no password the device knows appears in any answer of either web site or in the log (#18).
 - `HttpServer` has `sendHeader()` instead of `authenticateDigest()`; the core checks Digest credentials itself (#17).
 
 ### Added

@@ -247,6 +247,7 @@ void test_invalid_networks_are_refused_with_a_code()
         {{{"password", "correct horse"}}, "ssid-empty"},
         {{{"ssid", ""}, {"password", "correct horse"}}, "ssid-empty"},
         {{{"ssid", std::string(33, 's')}}, "ssid-too-long"},
+        {{{"ssid", std::string("Ho\0me", 5)}, {"password", "correct horse"}}, "ssid-invalid"},
         {{{"ssid", "Home"}, {"password", "1234567"}}, "password-too-short"},
         {{{"ssid", "Home"}, {"password", std::string(65, 'p')}}, "password-too-long"},
         {{{"ssid", "Home"}, {"password", std::string(64, 'p')}}, "password-invalid"},
@@ -294,6 +295,32 @@ void test_password_is_never_logged()
 }
 
 // --- Save anyway ---
+
+// Only saveAnyway=1 skips the test; anything else is an ordinary submission.
+void test_other_save_anyway_values_test_the_network()
+{
+    for (const char* value : {"", "0", "yes", "true", "11"})
+    {
+        Device d;
+        d.open();
+        TEST_ASSERT_EQUAL_INT(
+            200, d.submit({{"ssid", "Home"}, {"password", "correct horse"}, {"saveAnyway", value}})
+                     .status);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(R"({"state":"testing","ssid":"Home"})", d.result().c_str(),
+                                         value);
+        TEST_ASSERT_EQUAL_UINT32(0, d.esp.networks().count());
+    }
+}
+
+// Names are text to the device; the page escapes them, and so does the JSON.
+void test_unusual_ssid_is_kept_exactly_and_escaped_in_json()
+{
+    Device d;
+    d.open();
+    d.submit({{"ssid", "Caf\xc3\xa9 \"<b>\"\t"}, {"password", "correct horse"}});
+    TEST_ASSERT_EQUAL_STRING("{\"state\":\"testing\",\"ssid\":\"Caf\xc3\xa9 \\\"<b>\\\"\\t\"}",
+                             d.result().c_str());
+}
 
 void test_save_anyway_saves_without_testing()
 {
@@ -418,6 +445,8 @@ int main()
     RUN_TEST(test_invalid_networks_are_refused_with_a_code);
     RUN_TEST(test_submitting_from_the_stations_network_is_refused);
     RUN_TEST(test_password_is_never_logged);
+    RUN_TEST(test_other_save_anyway_values_test_the_network);
+    RUN_TEST(test_unusual_ssid_is_kept_exactly_and_escaped_in_json);
     RUN_TEST(test_save_anyway_saves_without_testing);
     RUN_TEST(test_nothing_more_is_accepted_after_provisioning);
     RUN_TEST(test_trial_replaces_the_connection_to_a_saved_network);

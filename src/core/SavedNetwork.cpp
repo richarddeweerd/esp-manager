@@ -54,6 +54,10 @@ SavedNetwork::Problem SavedNetwork::validate() const
     {
         return Problem::SsidTooLong;
     }
+    if (ssid.find('\0') != std::string::npos)
+    {
+        return Problem::SsidInvalidCharacter;
+    }
     if (!password.empty())
     {
         if (password.size() < kMinPasswordLength)
@@ -97,6 +101,8 @@ const char* toString(SavedNetwork::Problem problem)
         return "SSID is empty";
     case SavedNetwork::Problem::SsidTooLong:
         return "SSID is longer than 32 bytes";
+    case SavedNetwork::Problem::SsidInvalidCharacter:
+        return "SSID has a NUL byte";
     case SavedNetwork::Problem::PasswordTooShort:
         return "password is shorter than 8 characters";
     case SavedNetwork::Problem::PasswordTooLong:
