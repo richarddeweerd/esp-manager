@@ -108,6 +108,11 @@ void test_ssid_must_be_1_to_32_bytes()
     TEST_ASSERT_EQUAL(Problem::SsidEmpty, network.validate());
     network.ssid = std::string(33, 's');
     TEST_ASSERT_EQUAL(Problem::SsidTooLong, network.validate());
+    network.ssid = std::string("Ho\0me", 5);
+    TEST_ASSERT_EQUAL(Problem::SsidInvalidCharacter, network.validate());
+    // Anything else goes: an SSID is just bytes.
+    network.ssid = "Café \"<b>\" \t ☕";
+    TEST_ASSERT_EQUAL(Problem::None, network.validate());
 }
 
 void test_password_must_be_empty_8_to_63_printable_or_64_hex()

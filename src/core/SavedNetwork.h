@@ -18,6 +18,7 @@ struct SavedNetwork
         None,
         SsidEmpty,
         SsidTooLong,               // more than 32 bytes
+        SsidInvalidCharacter,      // a NUL byte, which would cut the name short
         PasswordTooShort,          // 1 to 7 characters; empty means an open network
         PasswordTooLong,           // more than 64 characters
         PasswordInvalidCharacter,  // a passphrase may only hold printable ASCII

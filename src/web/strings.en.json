@@ -42,6 +42,7 @@
   "errors": {
     "ssid-empty": "Enter the network's name.",
     "ssid-too-long": "A network name is at most 32 bytes.",
+    "ssid-invalid": "A network name can't contain a NUL character.",
     "password-too-short": "A Wi-Fi password has at least 8 characters.",
     "password-too-long": "A Wi-Fi password has at most 63 characters, or 64 hex digits.",
     "password-invalid": "The password may only use letters, digits, spaces and the usual symbols; 64 characters must be hex digits.",

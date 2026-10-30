@@ -22,6 +22,8 @@ const char* code(SavedNetwork::Problem problem)
         return "ssid-empty";
     case SavedNetwork::Problem::SsidTooLong:
         return "ssid-too-long";
+    case SavedNetwork::Problem::SsidInvalidCharacter:
+        return "ssid-invalid";
     case SavedNetwork::Problem::PasswordTooShort:
         return "password-too-short";
     case SavedNetwork::Problem::PasswordTooLong:
