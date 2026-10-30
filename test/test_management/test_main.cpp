@@ -212,7 +212,7 @@ void test_saved_networks_are_listed_without_passwords()
     const FakeHttpServer::Response response = d.login("/api/networks");
     TEST_ASSERT_EQUAL_INT(200, response.status);
     TEST_ASSERT_EQUAL_STRING(
-        "{\"connected\":\"Home\",\"networks\":[{\"ssid\":\"Home\",\"priority\":0}]}",
+        "{\"connected\":\"Home\",\"max\":5,\"networks\":[{\"ssid\":\"Home\",\"priority\":0}]}",
         response.body.c_str());
     TEST_ASSERT_TRUE(response.body.find("correct horse") == std::string::npos);
 }

@@ -42,12 +42,17 @@ void loop()
 
 On a new device the Owner sets up Wi-Fi from a phone: join the device's access point, pick the network on the page that opens, enter its password. The device tests the network before it saves it; if the test fails, the page says why and offers to try again or to save it anyway (for a network that's out of range right now). `onProvisioningCompleted` reports the saved network, and the portal closes 30 seconds later. Testing runs the access point and the station connection at the same time, so the access point may move to the router's channel and drop the phone for a moment; the page warns about this and picks up the result once the phone is back.
 
-After a restart the device connects to its Saved Network by itself. A sketch can also save one directly, and check where the connection stands:
+After a restart the device connects to its Saved Networks by itself. It keeps up to five, in the Owner's order: it joins the first one on the list that's in range. A network the Owner adds goes to the top. Both web sites list the Saved Networks, and the Owner can move them up and down or remove them there. A sketch can also change the list directly, and check where the connection stands:
 
 ```cpp
-esp.networks().save("Home", "wifi password");  // stored in NVS; replaces the previous one
+esp.networks().setMaxNetworks(3);              // how many fit (1 to 20, 5 by default)
+esp.networks().save("Home", "wifi password");  // stored in NVS, on top of the list
+esp.networks().move("Home", 1);                // second place; 0 is the top
+esp.networks().remove("Old router");
 if (esp.state() == espmgr::ConnectionState::Connected) { /* … */ }
 ```
+
+`save()` returns `false` when the list is full, unless that SSID is saved already: then it's updated in its place. A list stored by firmware with a higher limit is kept as it is, but nothing can be added until it's below the new limit. Removing the network the device is connected to doesn't disconnect it; the device moves on when that connection ends.
 
 The device tells the router its name, `esp-` plus the last six hex digits of its MAC address (such as `esp-abcdef`). Change it before `begin()` with `esp.setHostname("kitchen-lamp")`, or keep the MAC part and change only the prefix with `esp.setNamePrefix("lamp")`. A Saved Network uses DHCP unless it's saved with a static address:
 
@@ -63,7 +68,7 @@ esp.networks().save(office);
 
 `begin()` never waits. A sketch that needs Wi-Fi before it goes on can opt in to waiting with `esp.waitForConnection(10000)`, which keeps calling `process()` and returns `true` once connected or `false` after the timeout (10 s here); connecting carries on in `process()` either way.
 
-The connection state is `Idle` (no Saved Network), `Connecting`, `Connected` or `Waiting` (to try again after a failure or a lost connection). Each attempt scans first and joins the best Saved Network in range. After a failure the device waits before trying again, 1 s at first and twice as long after each further failure, up to 5 minutes, with some randomness so devices don't all retry at once. `esp.setRetryDelays(minMs, maxMs)` changes those limits, and `esp.lastFailure()` tells why the last attempt failed (`espmgr::toString()` turns it into text such as "wrong password").
+The connection state is `Idle` (no Saved Network), `Connecting`, `Connected` or `Waiting` (to try again after a failure or a lost connection). Each attempt scans first and joins the first Saved Network in range; if none is in range, it tries the first on the list anyway, in case it's hidden. After a failure the device waits before trying again, 1 s at first and twice as long after each further failure, up to 5 minutes, with some randomness so devices don't all retry at once. `esp.setRetryDelays(minMs, maxMs)` changes those limits, and `esp.lastFailure()` tells why the last attempt failed (`espmgr::toString()` turns it into text such as "wrong password").
 
 Without a Saved Network, the device opens the Provisioning Portal: an access point named after the device (`esp-abcdef`), open by default. `esp.startPortal()` opens it at any other time, for example from your own button code, and `esp.stopPortal()` closes it; `esp.portalState()` is `Off` or `Active`. The pages only answer on that access point, never on the network the device is connected to. The setup page lists the networks in range, strongest first, each SSID once, without hidden networks or ones weaker than -90 dBm (`esp.portal().setMinSignal(-80)` changes that), plus "Other network…" for a hidden one. It's a captive portal: phones that join the access point show "sign in to network" and open the setup page by themselves (`esp.portal().setCaptivePortal(false)` turns that off; the page is then at `http://192.168.4.1/`). It closes after 10 minutes without a request, and opens again while there's still no Saved Network. The settings are on `esp.portal()`:
 
@@ -96,6 +101,8 @@ esp.settingsReset();   // Settings back to their defaults (no Settings yet, so n
 esp.factoryReset();    // erase everything stored, your own Preferences included, and restart
 esp.restart();         // restart a moment later, from process()
 ```
+
+On the Management Interface's Wi-Fi tab the Owner can also add a network. It's saved without a test, since testing would drop the Owner's own connection; the Provisioning Portal is the place to test one. The last Saved Network can't be removed there; that's what the Network Reset is for.
 
 The Management Interface's Device tab offers the restart, the Network Reset and the Factory Reset, each after a confirmation. The library reads no buttons itself; [examples/Button](examples/Button) shows how to wire one up.
 

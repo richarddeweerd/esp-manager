@@ -9,6 +9,11 @@ Build the image with scripts/build-hw-tests.sh. The test network is read from th
 variables ESPMGR_TEST_SSID and ESPMGR_TEST_PASSWORD and sent to the board over the serial port;
 without them the tests that need a network are ignored. The password is never printed.
 
+For the tests that move between two networks, ESPMGR_TEST_SSID_B names a second network with the
+same password, and ESPMGR_TEST_SWITCH is a command that, given "a" or "b", makes the access point
+broadcast the first or the second name (the rig's own script). Without both they are ignored.
+The access point is switched back to the first name when the run ends.
+
 Needs esptool (5.x) and pyserial. Exits non-zero when a test fails or the run does not finish.
 """
 
@@ -26,6 +31,8 @@ import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+
+import shlex
 
 import serial
 
@@ -218,7 +225,32 @@ def management_checks(ip, hostname):
     return "ok"
 
 
-def run(conn, ssid, password, timeout_s):
+class Switcher:
+    """Runs ESPMGR_TEST_SWITCH and remembers whether the access point must be switched back."""
+
+    def __init__(self, command):
+        self.command = shlex.split(command) if command else []
+        self.on_b = False
+
+    def switch(self, which):
+        if which not in ("a", "b"):
+            return f"unknown network {which!r}"
+        try:
+            subprocess.run(self.command + [which], check=True, timeout=60,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        except subprocess.CalledProcessError as error:
+            return f"switch {which} failed: {error.stderr.strip() or error.returncode}"
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return f"switch {which} failed: {error}"
+        self.on_b = which == "b"
+        return "ok"
+
+    def restore(self):
+        if self.on_b:
+            print(f"==> Switching the access point back: {self.switch('a')}", flush=True)
+
+
+def run(conn, ssid, password, ssid_b, switcher, timeout_s):
     """Talks to the board until Unity prints its summary. Returns (results, summary)."""
     results = []
     summary = None
@@ -240,7 +272,10 @@ def run(conn, ssid, password, timeout_s):
             print(line, flush=True)
 
             if line == "ESPMGR-HW READY" and not answered:
-                if ssid:
+                if ssid and ssid_b:
+                    conn.write(f"WIFI\t{ssid}\t{password}\t{ssid_b}\n".encode())
+                    print(f"==> Sent test networks {ssid} and {ssid_b}", flush=True)
+                elif ssid:
                     conn.write(f"WIFI\t{ssid}\t{password}\n".encode())
                     print(f"==> Sent test network {ssid}", flush=True)
                 else:
@@ -260,6 +295,11 @@ def run(conn, ssid, password, timeout_s):
                 outcome = management_checks(ip, hostname)
                 print(f"==> Management Interface checks: {outcome}", flush=True)
                 conn.write(f"MGMT DONE {outcome}\n".encode())
+            elif line.startswith("ESPMGR-HW SWITCH "):
+                which = line.split(" ", 2)[2]
+                outcome = switcher.switch(which) if switcher.command else "no switch command"
+                print(f"==> Switched the access point to {which}: {outcome}", flush=True)
+                conn.write(f"SWITCH DONE {outcome}\n".encode())
             elif (match := RESULT.match(line)):
                 results.append(match.groupdict())
             elif (match := SUMMARY.match(line)):
@@ -302,12 +342,17 @@ def main():
 
     ssid = os.environ.get("ESPMGR_TEST_SSID", "")
     password = os.environ.get("ESPMGR_TEST_PASSWORD", "")
+    switcher = Switcher(os.environ.get("ESPMGR_TEST_SWITCH", ""))
+    ssid_b = os.environ.get("ESPMGR_TEST_SSID_B", "") if ssid and switcher.command else ""
 
     start = time.monotonic()
-    with open_port(args.port) as conn:
-        if args.no_flash:
-            reset(conn)
-        results, summary = run(conn, ssid, password, args.timeout)
+    try:
+        with open_port(args.port) as conn:
+            if args.no_flash:
+                reset(conn)
+            results, summary = run(conn, ssid, password, ssid_b, switcher, args.timeout)
+    finally:
+        switcher.restore()
     elapsed = time.monotonic() - start
 
     if args.junit:

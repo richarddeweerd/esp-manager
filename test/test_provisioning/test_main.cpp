@@ -359,7 +359,7 @@ void test_nothing_more_is_accepted_after_provisioning()
 
 // --- With a Saved Network already ---
 
-void test_trial_replaces_the_connection_to_a_saved_network()
+void test_trial_replaces_the_connection_and_goes_on_top()
 {
     Device d;
     TEST_ASSERT_TRUE(d.esp.networks().save("Old", "correct horse"));
@@ -376,8 +376,9 @@ void test_trial_replaces_the_connection_to_a_saved_network()
     TEST_ASSERT_EQUAL_STRING("New", d.fakes.wifi.connectCalls.back().ssid.c_str());
     d.fakes.wifi.completeConnect();
     d.esp.process();
-    TEST_ASSERT_EQUAL(1, d.esp.networks().count());
+    TEST_ASSERT_EQUAL(2, d.esp.networks().count());
     TEST_ASSERT_EQUAL_STRING("New", d.esp.networks().list()[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Old", d.esp.networks().list()[1].ssid.c_str());
 }
 
 void test_failed_trial_goes_back_to_the_saved_network()
@@ -449,7 +450,7 @@ int main()
     RUN_TEST(test_unusual_ssid_is_kept_exactly_and_escaped_in_json);
     RUN_TEST(test_save_anyway_saves_without_testing);
     RUN_TEST(test_nothing_more_is_accepted_after_provisioning);
-    RUN_TEST(test_trial_replaces_the_connection_to_a_saved_network);
+    RUN_TEST(test_trial_replaces_the_connection_and_goes_on_top);
     RUN_TEST(test_failed_trial_goes_back_to_the_saved_network);
     RUN_TEST(test_portal_opened_after_failing_waits_for_the_page_before_closing);
     return UNITY_END();

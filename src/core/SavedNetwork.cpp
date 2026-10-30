@@ -119,6 +119,25 @@ const char* toString(SavedNetwork::Problem problem)
     return "unknown";
 }
 
+const char* errorCode(SavedNetwork::Problem problem)
+{
+    switch (problem)
+    {
+    case SavedNetwork::Problem::SsidEmpty:
+        return "ssid-empty";
+    case SavedNetwork::Problem::SsidTooLong:
+        return "ssid-too-long";
+    case SavedNetwork::Problem::SsidInvalidCharacter:
+        return "ssid-invalid";
+    case SavedNetwork::Problem::PasswordTooShort:
+        return "password-too-short";
+    case SavedNetwork::Problem::PasswordTooLong:
+        return "password-too-long";
+    default:
+        return "password-invalid";
+    }
+}
+
 bool operator==(const SavedNetwork& a, const SavedNetwork& b)
 {
     const StaticIpConfig& x = a.staticIp;

@@ -8,6 +8,7 @@
 #include "core/ManagementInterface.h"
 #include "core/NetworkScanner.h"
 #include "core/SavedNetworks.h"
+#include "core/SavedNetworksApi.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 #include "core/WifiDriver.h"
@@ -56,14 +57,15 @@ public:
     static constexpr uint64_t kCloseDelayMs = 30000;
 
     // `deviceName` gives the access point's default SSID, `status` what GET /api/status shows.
-    ProvisioningPortal(WifiDriver& wifi, WebRoutes& routes, Clock& clock, NetworkScanner& scanner,
-                       SavedNetworks& networks, WifiConnection& connection,
-                       ManagementInterface& management, Events& events, Logger& log,
-                       std::function<std::string()> deviceName,
+    ProvisioningPortal(WifiDriver& wifi, WebRoutes& routes, SavedNetworksApi& networksApi,
+                       Clock& clock, NetworkScanner& scanner, SavedNetworks& networks,
+                       WifiConnection& connection, ManagementInterface& management, Events& events,
+                       Logger& log, std::function<std::string()> deviceName,
                        std::function<DeviceStatus()> status)
-        : wifi_(wifi), routes_(routes), http_(routes.http()), clock_(clock), scanner_(scanner),
-          networks_(networks), connection_(connection), management_(management), events_(events),
-          log_(log), deviceName_(std::move(deviceName)), status_(std::move(status))
+        : wifi_(wifi), routes_(routes), networksApi_(networksApi), http_(routes.http()),
+          clock_(clock), scanner_(scanner), networks_(networks), connection_(connection),
+          management_(management), events_(events), log_(log), deviceName_(std::move(deviceName)),
+          status_(std::move(status))
     {
     }
 
@@ -171,6 +173,7 @@ private:
 
     WifiDriver& wifi_;
     WebRoutes& routes_;
+    SavedNetworksApi& networksApi_;
     HttpServer& http_;
     Clock& clock_;
     NetworkScanner& scanner_;

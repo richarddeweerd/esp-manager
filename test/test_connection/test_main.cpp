@@ -363,13 +363,14 @@ void test_unreadable_record_counts_as_no_network()
 
 // --- esp.networks() ---
 
-void test_saving_a_network_replaces_the_one_before()
+void test_a_new_network_goes_on_top()
 {
     Device d;
     TEST_ASSERT_TRUE(d.esp.networks().save("Home", "correct horse"));
     TEST_ASSERT_TRUE(d.esp.networks().save("Office", ""));
-    TEST_ASSERT_EQUAL(1, d.esp.networks().count());
+    TEST_ASSERT_EQUAL(2, d.esp.networks().count());
     TEST_ASSERT_EQUAL_STRING("Office", d.esp.networks().list()[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Home", d.esp.networks().list()[1].ssid.c_str());
     TEST_ASSERT_TRUE(d.esp.networks().list()[0].dhcp);
 }
 
@@ -420,7 +421,7 @@ int main()
     RUN_TEST(test_static_addressing_is_applied_to_the_attempt);
     RUN_TEST(test_listeners_see_the_new_state);
     RUN_TEST(test_unreadable_record_counts_as_no_network);
-    RUN_TEST(test_saving_a_network_replaces_the_one_before);
+    RUN_TEST(test_a_new_network_goes_on_top);
     RUN_TEST(test_invalid_networks_are_refused_and_change_nothing);
     RUN_TEST(test_failed_write_keeps_the_old_network);
     return UNITY_END();

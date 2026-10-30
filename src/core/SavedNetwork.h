@@ -45,6 +45,9 @@ struct SavedNetwork
 
 const char* toString(SavedNetwork::Problem problem);
 
+// The code the web pages turn into their own text, such as "password-too-short".
+const char* errorCode(SavedNetwork::Problem problem);
+
 bool operator==(const SavedNetwork& a, const SavedNetwork& b);
 
 inline bool operator!=(const SavedNetwork& a, const SavedNetwork& b)

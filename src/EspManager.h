@@ -11,6 +11,7 @@
 #include "core/ProvisioningPortal.h"
 #include "core/SavedNetworkStore.h"
 #include "core/SavedNetworks.h"
+#include "core/SavedNetworksApi.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 
@@ -172,18 +173,20 @@ private:
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
     WebRoutes routes_{platform_.wifi, platform_.http};
+    SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
     ManagementInterface management_{
         routes_,
+        networksApi_,
         platform_.storage,
         platform_.clock,
         connection_,
-        networks_,
         log_,
         [this] { return hostname(); },
         [this] { return status(); },
         {[this] { restart(); }, [this] { networkReset(); }, [this] { factoryReset(); }}};
     ProvisioningPortal portal_{platform_.wifi,
                                routes_,
+                               networksApi_,
                                platform_.clock,
                                scanner_,
                                networks_,

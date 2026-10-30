@@ -4,7 +4,7 @@
 #include "core/DeviceStatus.h"
 #include "core/DigestAuth.h"
 #include "core/Logger.h"
-#include "core/SavedNetworks.h"
+#include "core/SavedNetworksApi.h"
 #include "core/Storage.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
@@ -16,7 +16,8 @@ namespace espmgr
 {
 
 // The Management Interface (EP03): web pages on the station's network where the Owner sees the
-// device's status and, in later versions, manages its Saved Networks and Settings. Reached
+// device's status and manages its Saved Networks (adding one saves it without a test, since
+// testing would drop the Owner's own connection) and, in later versions, its Settings. Reached
 // through esp.management().
 //
 // It's off unless the Developer enables it, and always password-protected with HTTP Digest
@@ -49,12 +50,12 @@ public:
     static constexpr const char* kStorageNamespace = "espmgr-mgmt";
 
     // `deviceName` gives the default realm, `status` what GET /api/status shows.
-    ManagementInterface(WebRoutes& routes, Storage& storage, Clock& clock,
-                        WifiConnection& connection, SavedNetworks& networks, Logger& log,
+    ManagementInterface(WebRoutes& routes, SavedNetworksApi& networksApi, Storage& storage,
+                        Clock& clock, WifiConnection& connection, Logger& log,
                         std::function<std::string()> deviceName,
                         std::function<DeviceStatus()> status, Actions actions)
-        : routes_(routes), storage_(storage), clock_(clock), connection_(connection),
-          networks_(networks), log_(log), deviceName_(std::move(deviceName)),
+        : routes_(routes), networksApi_(networksApi), storage_(storage), clock_(clock),
+          connection_(connection), log_(log), deviceName_(std::move(deviceName)),
           status_(std::move(status)), actions_(std::move(actions)), auth_(clock)
     {
     }
@@ -112,17 +113,16 @@ private:
     // True if `request` carries the Owner's credentials. Otherwise answers it with the 401
     // challenge itself.
     bool authorize(const HttpRequest& request);
-    void sendNetworks();
     // POST /api/restart, /api/network-reset and /api/factory-reset.
     void registerAction(const char* path, const char* name,
                         std::function<void()> Actions::* action);
     std::string storedId() const;
 
     WebRoutes& routes_;
+    SavedNetworksApi& networksApi_;
     Storage& storage_;
     Clock& clock_;
     WifiConnection& connection_;
-    SavedNetworks& networks_;
     Logger& log_;
     std::function<std::string()> deviceName_;
     std::function<DeviceStatus()> status_;
