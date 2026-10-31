@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-30
+## [0.1.0] - 2026-10-31
 
 The first release: connecting, setup from a phone and an optional management page, for ESP32, ESP32-S3 and ESP32-C3 on Arduino-ESP32 core 3.x.
 
