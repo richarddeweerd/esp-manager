@@ -73,7 +73,7 @@ public:
 
     bool clear(const std::string& ns) override
     {
-        if (!isValidName(ns))
+        if (!clearable || !isValidName(ns))
         {
             return false;
         }
@@ -89,6 +89,10 @@ public:
 
     // When false, every put fails, as when the NVS partition is full.
     bool writable = true;
+    // A put of this key fails, to test a failure halfway through several puts.
+    std::string failingKey;
+    // When false, clear() fails.
+    bool clearable = true;
 
     // Namespace → key → value. Tests may read or prefill it directly.
     std::map<std::string, std::map<std::string, Value>> data;
@@ -111,7 +115,7 @@ private:
 
     bool put(const std::string& ns, const std::string& key, Value value)
     {
-        if (!writable || !isValidName(ns) || !isValidName(key))
+        if (!writable || key == failingKey || !isValidName(ns) || !isValidName(key))
         {
             return false;
         }

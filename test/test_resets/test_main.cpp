@@ -155,7 +155,7 @@ void test_network_reset_during_a_portal_test_fails_the_test()
 
 // --- Settings Reset ---
 
-void test_settings_reset_keeps_networks_and_data_until_there_are_settings()
+void test_settings_reset_keeps_networks_and_data()
 {
     Device d;
     TEST_ASSERT_TRUE(d.esp.settingsReset());
@@ -288,7 +288,7 @@ int main()
     RUN_TEST(test_after_a_network_reset_the_portal_opens);
     RUN_TEST(test_network_reset_while_idle_changes_nothing_else);
     RUN_TEST(test_network_reset_during_a_portal_test_fails_the_test);
-    RUN_TEST(test_settings_reset_keeps_networks_and_data_until_there_are_settings);
+    RUN_TEST(test_settings_reset_keeps_networks_and_data);
     RUN_TEST(test_factory_reset_erases_everything);
     RUN_TEST(test_factory_reset_restarts_a_moment_later);
     RUN_TEST(test_failed_erase_is_reported_and_still_restarts);

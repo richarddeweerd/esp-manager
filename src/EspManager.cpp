@@ -20,6 +20,7 @@ void EspManager::begin()
 {
     log_.info("core", "EspManager %s starting", ESPMGR_VERSION);
     networks_.load();
+    settings_.begin();
     // Before anything starts the station interface, which takes the hostname with it.
     platform_.wifi.setHostname(hostname());
     log_.info("core", "hostname %s", hostname().c_str());
@@ -192,8 +193,8 @@ bool EspManager::networkReset()
 
 bool EspManager::settingsReset()
 {
-    log_.info("core", "Settings Reset: no Settings yet");
-    return true;
+    log_.info("core", "Settings Reset");
+    return settings_.reset();
 }
 
 bool EspManager::factoryReset()
@@ -205,6 +206,7 @@ bool EspManager::factoryReset()
         log_.error("core", "couldn't erase the storage");
     }
     networks_.load();
+    settings_.load();
     management_.begin();
     connection_.forget();
     restart();
@@ -240,6 +242,11 @@ std::vector<ScanResult> EspManager::scanResults() const
 SavedNetworks& EspManager::networks()
 {
     return networks_;
+}
+
+Settings& EspManager::settings()
+{
+    return settings_;
 }
 
 EspManager& EspManager::onConnected(std::function<void(const ConnectedInfo&)> listener)
@@ -285,6 +292,12 @@ EspManager&
 EspManager::onProvisioningCompleted(std::function<void(const std::string& ssid)> listener)
 {
     events_.provisioningCompleted.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onSettingChanged(std::function<void(const Setting&)> listener)
+{
+    events_.settingChanged.add(std::move(listener));
     return *this;
 }
 

@@ -13,6 +13,8 @@
 namespace espmgr
 {
 
+class Setting;
+
 // Where the Wi-Fi connection stands. Waiting means a retry is scheduled after a failure.
 enum class ConnectionState : uint8_t
 {
@@ -96,6 +98,7 @@ public:
     Listeners<const std::string&> portalStarted;
     Listeners<> portalStopped;
     Listeners<const std::string&> provisioningCompleted;
+    Listeners<const Setting&> settingChanged;
 
     void raiseConnected(ConnectedInfo info);
     void raiseDisconnected(FailureReason reason);
@@ -104,6 +107,8 @@ public:
     void raisePortalStarted(std::string accessPointSsid);
     void raisePortalStopped();
     void raiseProvisioningCompleted(std::string ssid);
+    // `setting` must outlive the delivery; Settings live as long as the EspManager.
+    void raiseSettingChanged(const Setting& setting);
 
     // Calls the listeners of every queued event in the order raised, including events the
     // listeners raise meanwhile. Does nothing when called from inside a listener.

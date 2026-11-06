@@ -41,6 +41,11 @@ void Events::raiseProvisioningCompleted(std::string ssid)
     pending_.push_back([this, ssid = std::move(ssid)] { provisioningCompleted.call(ssid); });
 }
 
+void Events::raiseSettingChanged(const Setting& setting)
+{
+    pending_.push_back([this, &setting] { settingChanged.call(setting); });
+}
+
 void Events::deliver()
 {
     if (delivering_)
