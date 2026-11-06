@@ -146,6 +146,8 @@ void test_measures_32_settings()
                   static_cast<unsigned>(readUs / 1000));
     TEST_ASSERT_EQUAL_size_t(32, esp.settings().count());
     TEST_ASSERT_EQUAL_STRING("a stored value of 20", esp.settings().text("m00").c_str());
+    // The README gives these figures; a big change should be noticed.
+    TEST_ASSERT_LESS_THAN_UINT32(12000, before - loaded);
     // begin() returns at once, so reading the Settings must stay short.
     TEST_ASSERT_LESS_THAN_UINT32(100000, readUs);
 }

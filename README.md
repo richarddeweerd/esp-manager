@@ -38,11 +38,12 @@ Version `0.1.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHA
 - Connects to the Saved Networks by itself, in the Owner's order, and reconnects after a lost connection, waiting longer after each failure.
 - Setup from a phone through a temporary access point and captive portal: pick a network from a scan or enter a hidden one. The device tests the network before it saves it.
 - Up to 5 Saved Networks by default, each with DHCP or a static address.
-- An optional, password-protected management page on the Owner's own network: the Saved Networks, the device's status, a restart and the resets.
+- Your own settings on the web pages: text, passwords, numbers, checkboxes and selections, checked and stored in NVS for you.
+- An optional, password-protected management page on the Owner's own network: the Saved Networks, the device's status, chosen settings, a restart and the resets.
 - Events for connection and setup changes, always called from inside `process()`.
 - Everything happens in `process()`; nothing waits unless you ask for it.
 
-Planned for later versions: your own settings fields on the web pages, diagnostics, theming of the pages, over-the-air updates and NTP time.
+Planned for later versions: diagnostics, theming of the pages, over-the-air updates and NTP time.
 
 ## Terms
 
@@ -53,6 +54,7 @@ The README uses a few words in a fixed sense:
 - **Saved Network**: a Wi-Fi network the device has stored, with its password, to connect to.
 - **Provisioning Portal**: the setup site. The device opens its own access point and serves a setup page on it, so the Owner can choose a Saved Network. It only answers on that access point.
 - **Management Interface**: the management site, off unless you turn it on. A password-protected page on the device's address in the Owner's own network, once the device is connected.
+- **Setting**: a named value your firmware declares and the Owner fills in on the web pages, such as a server's name. Settings are grouped in **Sections**.
 
 ## Quick start
 
@@ -212,11 +214,12 @@ esp.portal().setMinSignal(-80);                       // leave out networks weak
 
 ### Management Interface
 
-The Management Interface is a page on the device's own address in the Owner's network, such as `http://192.168.1.50/`, with three tabs:
+The Management Interface is a page on the device's own address in the Owner's network, such as `http://192.168.1.50/`, with these tabs:
 
 - **Wi-Fi**: the Saved Networks, with the one in use marked. The Owner can move or remove a network, and add one. An added network is saved without a test, since testing would drop the Owner's own connection; the Provisioning Portal is the place to test one. The last Saved Network can't be removed here; the Network Reset is for that.
 - **Status**: the connection, addresses, signal, hostname, MAC, uptime, free memory, chip and versions.
-- **Device**: restart, Network Reset and Factory Reset, each after a confirmation.
+- **Settings**: only when you mark a Setting for it; see [Settings](#settings).
+- **Device**: restart, Settings Reset, Network Reset and Factory Reset, each after a confirmation.
 
 It's off by default. Turn it on before `begin()`:
 
@@ -230,6 +233,89 @@ esp.begin();
 With it enabled, the Provisioning Portal asks the Owner for a management password after the Wi-Fi password, and stores it when setup completes. The Management Interface only answers once a password is stored and the device is connected. Browsers ask for the user name and password themselves (HTTP Digest authentication).
 
 If the Owner enters the password some other way, over serial or Bluetooth say, store it with `esp.management().setPassword(password)` (8 to 63 printable ASCII characters). Never hard-code a password in the firmware: every device would share it. Only a hash of the password is stored, and the hash includes the user name and realm, so changing either afterwards means the Owner sets the password again through the Provisioning Portal.
+
+### Settings
+
+Settings are your firmware's own values, for the Owner to fill in on the web pages: a server's name, a port, a choice of unit. The library checks every change, stores the values in NVS and tells you when one changes. Declare them before `esp.begin()`, which reads the stored values:
+
+```cpp
+auto& mqtt = esp.settings().section("MQTT");
+auto& host = mqtt.addText("mqtt_host", "Server").required();
+auto& port = mqtt.addNumber("mqtt_port", "Port", 1883).range(1, 65535);
+auto& password = mqtt.addPassword("mqtt_pass", "Password");
+auto& unit = esp.settings().addSelect("unit", "Unit", "c").option("c", "Celsius").option("f", "Fahrenheit");
+auto& verbose = esp.settings().addCheckbox("verbose", "Extra output");
+esp.begin();
+
+Serial.printf("%s:%d\n", host.value().c_str(), static_cast<int>(port.value()));
+```
+
+Keep the handles, or look a value up by key: `esp.settings().text("mqtt_host")`, `number("mqtt_port")` or `checkbox("verbose")`. `text()` is also for password and select Settings.
+
+| Declared with | Holds | Options |
+| --- | --- | --- |
+| `addText(key, label, default)` | a `std::string`, UTF-8 | `.required()`, `.maxLength(n)` |
+| `addPassword(key, label)` | a `std::string`, never shown or logged | `.required()`, `.maxLength(n)` |
+| `addNumber(key, label, default)` | an `int32_t` | `.range(min, max)` |
+| `addCheckbox(key, label, default)` | a `bool` | |
+| `addSelect(key, label, default)` | the value of one option, as a `std::string` | `.option(value, label)`, `.required()` |
+
+- A key is 1 to 15 letters, digits, `_` and `-`, and unique. It's also the name in NVS, so changing it loses the stored value.
+- Text and passwords are 64 bytes at most unless `.maxLength()` says otherwise, up to 512, and can't hold control characters.
+- `esp.settings().section("MQTT")` names a Section. Without one, a Setting goes under a default heading. Settings stay in the order you declare them.
+- A mistake in a declaration (a repeated or invalid key, or declaring after `begin()`) can't stop the build: it logs an error and gives a Setting that holds its default, isn't stored or shown, and answers `false` to `.valid()`. Turn on [logging](#logging) before you declare, as [examples/Settings](examples/Settings) does.
+
+For your own check, `.validate()` returns the text to show the Owner, or nothing to accept the value. It isn't called for an empty value, and it's also called for the stored value at `begin()`:
+
+```cpp
+esp.settings().addText("room", "Room").validate(
+    [](const std::string& value) { return value.size() < 3 ? std::string("Use at least 3 characters.") : std::string(); });
+```
+
+Your sketch can change a value too. `set()` makes the same checks, and returns `false` if the value was refused or couldn't be stored, or before `begin()`:
+
+```cpp
+auto& interval = esp.settings().addNumber("interval", "Interval (s)", 60).range(5, 3600);
+esp.begin();
+interval.set(120);
+```
+
+Whichever way a value changes, `onSettingChanged` reports it from inside `process()`, once per Setting. It doesn't fire when values load at `begin()`, or when a value is saved unchanged. A password's `text()` is always empty, so printing it this way is safe. A Setting that only takes effect after a restart can call `esp.restart()` here, which waits long enough for the page's answer to go out:
+
+```cpp
+esp.onSettingChanged(
+    [](const espmgr::Setting& setting)
+    {
+        Serial.printf("%s is now '%s'\n", setting.key().c_str(), setting.text().c_str());
+        if (setting.key() == "mqtt_host")
+        {
+            esp.restart();
+        }
+    });
+```
+
+**On the web pages.** During first setup, when there's no Saved Network yet, the Provisioning Portal shows one screen per Section after the management password, and the Owner can't go on while a required Setting is empty. The values are stored when setup completes. Adding a network later skips those screens; the list of Saved Networks has a *Settings* entry instead, which saves straight away. A save is all or nothing: if one value is refused, none change.
+
+The Management Interface shows only what you mark, and refuses the rest. The *Settings* tab appears when at least one Setting is marked:
+
+```cpp
+esp.settings().addText("display", "Display name").editableInManagement();
+```
+
+A password's field stays empty on the pages. Leaving it empty keeps the stored password; a password that isn't required also gets a box to remove it.
+
+**Required Settings** hold up first setup, but never Wi-Fi. A firmware update that adds one doesn't reopen the Provisioning Portal; the pages show a "needs attention" badge, and the sketch can decide what to do:
+
+```cpp
+if (!esp.settings().complete())
+{
+    esp.startPortal();
+}
+```
+
+**Storage.** A value is stored only when it differs from the default, each under its own key, so a new default in your firmware reaches every device whose Owner never changed that Setting. A stored value that no longer fits, after you narrow a range or remove an option say, reads as the default and stays stored until the Setting is next saved. A Settings Reset (`esp.settingsReset()`) returns everything to the defaults and keeps the Saved Networks.
+
+**Memory.** Measured on an ESP32 and an ESP32-S3, 32 Settings use about 7 KB of heap once declared, or about 8 KB with values stored in 20 of them, and `begin()` takes about 60 ms to read them. That's with labels of about 20 characters; longer labels, defaults and values use more. The figure comes from `test/test_hw_settings`, which prints it on every run.
 
 ### Events
 
@@ -250,6 +336,7 @@ esp.onConnected([](const espmgr::ConnectedInfo& info)
 | `onPortalStarted` | `const std::string& accessPointSsid` | the Provisioning Portal's access point is up |
 | `onPortalStopped` | none | the Provisioning Portal closed |
 | `onProvisioningCompleted` | `const std::string& ssid` | the Owner finished setup and the network is saved |
+| `onSettingChanged` | `const Setting&` | a Setting has a new value, once per Setting |
 
 Listeners can't be removed.
 
@@ -264,7 +351,7 @@ esp.factoryReset();   // erase all of NVS, your own Preferences included, and re
 esp.restart();        // restart a moment later, from process()
 ```
 
-The Network Reset keeps the management password. The resets return `false` if erasing failed; `factoryReset()` restarts anyway. The Management Interface's Device tab offers the restart, the Network Reset and the Factory Reset too.
+The Network Reset keeps the management password and the Settings; the Settings Reset keeps the Saved Networks and the management password. The resets return `false` if erasing failed; `factoryReset()` restarts anyway. The Management Interface's Device tab offers all of these too. Its Settings Reset also covers Settings the page doesn't show.
 
 ### Status
 
@@ -309,6 +396,7 @@ Lines look like `[espmgr 12.345 I wifi] connected to Home as 192.168.1.50, chann
 ## Examples
 
 - [Basic](examples/Basic): the smallest sketch, `begin()` and `process()`, with an optional wait for the connection.
+- [Settings](examples/Settings): your own settings in two Sections, with validation, a password, some marked for the Management Interface, and `onSettingChanged`.
 - [Button](examples/Button): the board's BOOT button opens the Provisioning Portal on a short press, starts a Network Reset when held for 5 seconds and a Factory Reset when held for 10, acting when it's let go. It's polled from `loop()` without `delay()`, and the serial monitor says what letting go will do. Build with `-D BUTTON_PIN=<n>` for another pin.
 
 ## Supported hardware
@@ -322,8 +410,10 @@ Lines look like `[espmgr 12.345 I wifi] connected to Home as 192.168.1.50, chann
 - Wi-Fi passwords are stored in the ESP32's NVS flash as plain text. They're only encrypted at rest if you enable the ESP32's flash and NVS encryption.
 - The Provisioning Portal's access point is open by default, and it's up while the Owner sets the device up. Anyone in range can use it then. Give it a password with `esp.portal().setPassword()` if that matters for your device; print the password on the device or its box.
 - The Management Interface is served over plain HTTP, since a small device can't realistically serve HTTPS. Its HTTP Digest authentication keeps the password itself off the network, but anyone on the same network can read the pages. It assumes a trusted local network. Only a hash of its password is stored.
-- Moving and removing Saved Networks, and on the Management Interface adding one, restarting and the resets, need a header that only the device's own pages send, so another web site can't make the Owner's browser do them.
-- Passwords never appear in the logs, the status or any page the device serves.
+- Password-type Settings are stored in NVS as plain text too, under the same condition. They never go to a page or the logs, but the sketch can read them.
+- Anyone in range of an open Provisioning Portal can read and change your Settings, and can replace or remove a password-type one, though not read it. If your Settings matter, give the portal a password. In the Management Interface, marked Settings are behind its login, and travel over plain HTTP like everything else on it.
+- Moving and removing Saved Networks, saving Settings, and on the Management Interface adding a network, restarting and the resets, need a header that only the device's own pages send, so another web site can't make the Owner's browser do them.
+- Passwords, password-type Settings included, never appear in the logs, the status or any page the device serves.
 
 ## Development
 
