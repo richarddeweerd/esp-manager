@@ -259,7 +259,7 @@ The library reads no buttons; call these from your own button or menu code ([exa
 
 ```cpp
 esp.networkReset();   // forget every Saved Network and leave the network; the Provisioning Portal opens again
-esp.settingsReset();  // Settings back to their defaults; there are no Settings yet, so it does nothing for now
+esp.settingsReset();  // Settings back to their defaults
 esp.factoryReset();   // erase all of NVS, your own Preferences included, and restart
 esp.restart();        // restart a moment later, from process()
 ```

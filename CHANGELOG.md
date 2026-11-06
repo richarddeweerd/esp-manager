@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- Settings (EP06): `esp.settings()` declares text, password, number, checkbox and select Settings, in Sections, each with validation (`.required()`, `.maxLength()`, `.range()`, `.option()`, `.validate()`). Values are stored in NVS only when they differ from the default. `esp.onSettingChanged()` reports changes, `esp.settings().complete()` says whether required ones are filled in, and `esp.settingsReset()` now returns them to their defaults. The web pages don't show them yet (#29).
+
 ## [0.1.0] - 2026-11-01
 
 The first release: connecting, setup from a phone and an optional management page, for ESP32, ESP32-S3 and ESP32-C3 on Arduino-ESP32 core 3.x.

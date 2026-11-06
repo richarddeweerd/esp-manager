@@ -12,6 +12,7 @@
 #include "core/SavedNetworkStore.h"
 #include "core/SavedNetworks.h"
 #include "core/SavedNetworksApi.h"
+#include "core/Settings.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 
@@ -101,8 +102,9 @@ public:
     // Networks couldn't be erased.
     bool networkReset();
 
-    // Settings Reset: returns every Setting to its default, keeping the Saved Networks. There
-    // are no Settings yet, so it does nothing for now.
+    // Settings Reset: returns every Setting to its default, keeping the Saved Networks. Listeners
+    // of onSettingChanged hear about the ones that changed. Returns false, changing nothing, if
+    // the stored values couldn't be erased.
     bool settingsReset();
 
     // Factory Reset: erases everything stored on the device (all of NVS, so the sketch's own
@@ -130,6 +132,10 @@ public:
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();
 
+    // The Settings your firmware declares, for the Owner to edit in the web pages. Declare them
+    // before begin(), for example `auto& port = esp.settings().addNumber("port", "Port", 1883);`.
+    Settings& settings();
+
     // Events. Each call adds a listener; any number can be added, and they can't be removed.
     // Listeners are only ever called from inside process(), after the change they report, so
     // they may call back into EspManager. Each returns *this, so calls can be chained.
@@ -150,6 +156,9 @@ public:
     EspManager& onPortalStopped(std::function<void()> listener);
     // The Owner finished the Provisioning Portal and the device saved the network (US12.2.2).
     EspManager& onProvisioningCompleted(std::function<void(const std::string& ssid)> listener);
+    // A Setting has a new value, from a web page, the sketch or a Settings Reset. Called once per
+    // Setting that changed; not when values load at begin(), or when a value is saved unchanged.
+    EspManager& onSettingChanged(std::function<void(const Setting&)> listener);
 
 private:
     friend struct EspManagerTestAccess;
@@ -168,6 +177,7 @@ private:
     Platform& platform_;
     Logger log_{platform_.log, platform_.clock};
     Events events_{log_};
+    Settings settings_{platform_.storage, events_, log_};
     SavedNetworkStore store_{platform_.storage, log_};
     SavedNetworks networks_{store_, log_};
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
