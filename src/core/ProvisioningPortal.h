@@ -9,6 +9,8 @@
 #include "core/NetworkScanner.h"
 #include "core/SavedNetworks.h"
 #include "core/SavedNetworksApi.h"
+#include "core/Settings.h"
+#include "core/SettingsApi.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 #include "core/WifiDriver.h"
@@ -44,6 +46,10 @@ namespace espmgr
 //
 // When the Developer has enabled the Management Interface, the Owner also chooses its password
 // here. It's stored together with the network, once provisioning completes.
+//
+// During first setup, meaning there's no Saved Network yet, the Owner fills in the Settings too.
+// The page keeps them and sends them with the network, and they're also stored once provisioning
+// completes. With Saved Networks the page edits them on their own and they're stored at once.
 class ProvisioningPortal
 {
 public:
@@ -58,14 +64,15 @@ public:
 
     // `deviceName` gives the access point's default SSID, `status` what GET /api/status shows.
     ProvisioningPortal(WifiDriver& wifi, WebRoutes& routes, SavedNetworksApi& networksApi,
-                       Clock& clock, NetworkScanner& scanner, SavedNetworks& networks,
-                       WifiConnection& connection, ManagementInterface& management, Events& events,
-                       Logger& log, std::function<std::string()> deviceName,
+                       Settings& settings, SettingsApi& settingsApi, Clock& clock,
+                       NetworkScanner& scanner, SavedNetworks& networks, WifiConnection& connection,
+                       ManagementInterface& management, Events& events, Logger& log,
+                       std::function<std::string()> deviceName,
                        std::function<DeviceStatus()> status)
-        : wifi_(wifi), routes_(routes), networksApi_(networksApi), http_(routes.http()),
-          clock_(clock), scanner_(scanner), networks_(networks), connection_(connection),
-          management_(management), events_(events), log_(log), deviceName_(std::move(deviceName)),
-          status_(std::move(status))
+        : wifi_(wifi), routes_(routes), networksApi_(networksApi), settings_(settings),
+          settingsApi_(settingsApi), http_(routes.http()), clock_(clock), scanner_(scanner),
+          networks_(networks), connection_(connection), management_(management), events_(events),
+          log_(log), deviceName_(std::move(deviceName)), status_(std::move(status))
     {
     }
 
@@ -174,6 +181,8 @@ private:
     WifiDriver& wifi_;
     WebRoutes& routes_;
     SavedNetworksApi& networksApi_;
+    Settings& settings_;
+    SettingsApi& settingsApi_;
     HttpServer& http_;
     Clock& clock_;
     NetworkScanner& scanner_;
@@ -216,6 +225,8 @@ private:
     SavedNetwork candidate_;
     // The Management Interface password that comes with it; empty to keep the current one.
     std::string candidateManagementPassword_;
+    // The Settings that come with it. They may include passwords.
+    SettingsApi::Fields candidateSettings_;
     bool closing_ = false;
     uint64_t closeAtMs_ = 0;
 };

@@ -323,6 +323,12 @@ void ProvisioningPortal::registerRoutes()
                                     return true;
                                 },
                                 {});
+    settingsApi_.registerRoutes(Site::Portal,
+                                [this](const HttpRequest&)
+                                {
+                                    seen();
+                                    return true;
+                                });
     // Every other address: the phones' connectivity checks and whatever the Owner typed.
     routes_.onNotFound(Site::Portal,
                        [this](const HttpRequest&)
@@ -395,6 +401,7 @@ void ProvisioningPortal::sendScan(const HttpRequest& request)
 
 // POST /api/connect with ssid, password and, to skip the test, saveAnyway=1. With the
 // Management Interface enabled, managementPassword too; it may be left empty when one is stored.
+// Settings come as `setting.<key>`; during first setup the required ones must be there.
 void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
 {
     if (result_ == Result::Testing)
@@ -437,6 +444,22 @@ void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
         }
     }
 
+    SettingsApi::Fields settingsFields = settingsApi_.fieldsFrom(request);
+    std::vector<Settings::FieldProblem> problems = settings_.check(settingsFields);
+    if (networks_.count() == 0)
+    {
+        const std::vector<Settings::FieldProblem> missing =
+            settings_.missingRequired(settingsFields);
+        problems.insert(problems.end(), missing.begin(), missing.end());
+    }
+    if (!problems.empty())
+    {
+        log_.info("portal", "refused a network: %u Setting(s) need attention",
+                  static_cast<unsigned>(problems.size()));
+        settingsApi_.sendProblems(400, problems);
+        return;
+    }
+
     resultSsid_ = network.ssid;
     resultFailure_ = FailureReason::None;
     resultIp_ = Ipv4Address();
@@ -449,6 +472,7 @@ void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
         }
         log_.info("portal", "saved %s without testing it", network.ssid.c_str());
         candidateManagementPassword_ = managementPassword;
+        candidateSettings_ = std::move(settingsFields);
         result_ = Result::Saved;
         provisioned(network.ssid);
     }
@@ -457,6 +481,7 @@ void ProvisioningPortal::receiveNetwork(const HttpRequest& request)
         log_.info("portal", "testing %s", network.ssid.c_str());
         candidate_ = network;
         candidateManagementPassword_ = managementPassword;
+        candidateSettings_ = std::move(settingsFields);
         result_ = Result::Testing;
         connection_.tryNetwork(network);
     }
@@ -500,6 +525,7 @@ void ProvisioningPortal::followTrial()
     {
         candidate_ = SavedNetwork();
         candidateManagementPassword_.clear();
+        candidateSettings_.clear();
     }
 }
 
@@ -510,6 +536,11 @@ void ProvisioningPortal::provisioned(const std::string& ssid)
         management_.setPassword(candidateManagementPassword_);
         candidateManagementPassword_.clear();
     }
+    if (!settings_.apply(candidateSettings_).empty())
+    {
+        log_.error("portal", "the network is saved, but the Settings couldn't be stored");
+    }
+    candidateSettings_.clear();
     events_.raiseProvisioningCompleted(ssid);
     closing_ = true;
     closeAtMs_ = clock_.nowMs() + kCloseDelayMs;

@@ -54,9 +54,10 @@ button, input { font: inherit; color: inherit; }
 
 .field { display: grid; gap: 6px; margin: 12px 0; }
 .field label { font-size: 14px; color: var(--muted); }
-.field input { width: 100%; padding: 12px 14px; border: 1px solid var(--line);
-  border-radius: var(--radius-sm); background: var(--surface); min-height: 48px; }
-.field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field input, .field select { width: 100%; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); background: var(--surface); color: inherit; font: inherit;
+  min-height: 48px; }
+.field input:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
 .error { color: var(--bad); font-size: 14px; margin: 4px 0 0; }
 
