@@ -107,6 +107,38 @@ const char* toString(Setting::Problem problem)
     return "unknown";
 }
 
+const char* errorCode(Setting::Problem problem)
+{
+    switch (problem)
+    {
+    case Setting::Problem::None:
+        return "";
+    case Setting::Problem::Required:
+        return "required";
+    case Setting::Problem::TooLong:
+        return "too-long";
+    case Setting::Problem::InvalidCharacter:
+        return "invalid-character";
+    case Setting::Problem::NotANumber:
+        return "not-a-number";
+    case Setting::Problem::OutOfRange:
+        return "out-of-range";
+    case Setting::Problem::NotACheckbox:
+        return "not-a-checkbox";
+    case Setting::Problem::UnknownOption:
+        return "unknown-option";
+    case Setting::Problem::Rejected:
+        return "rejected";
+    case Setting::Problem::WrongType:
+        return "wrong-type";
+    case Setting::Problem::UnknownSetting:
+        return "unknown-setting";
+    case Setting::Problem::NotStored:
+        return "not-stored";
+    }
+    return "other";
+}
+
 bool Setting::readStored(std::string& value)
 {
     auto stored = owner_.storage_.getString(Settings::kNamespace, key_);

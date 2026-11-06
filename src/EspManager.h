@@ -13,6 +13,7 @@
 #include "core/SavedNetworks.h"
 #include "core/SavedNetworksApi.h"
 #include "core/Settings.h"
+#include "core/SettingsApi.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 
@@ -184,6 +185,7 @@ private:
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
     WebRoutes routes_{platform_.wifi, platform_.http};
     SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
+    SettingsApi settingsApi_{routes_, settings_, log_};
     ManagementInterface management_{
         routes_,
         networksApi_,
@@ -197,6 +199,8 @@ private:
     ProvisioningPortal portal_{platform_.wifi,
                                routes_,
                                networksApi_,
+                               settings_,
+                               settingsApi_,
                                platform_.clock,
                                scanner_,
                                networks_,

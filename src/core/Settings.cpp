@@ -194,6 +194,22 @@ Settings::check(const std::vector<std::pair<std::string, std::string>>& fields)
 }
 
 std::vector<Settings::FieldProblem>
+Settings::missingRequired(const std::vector<std::pair<std::string, std::string>>& fields) const
+{
+    std::vector<FieldProblem> problems;
+    for (const std::unique_ptr<Setting>& setting : settings_)
+    {
+        const bool given = std::any_of(fields.begin(), fields.end(), [&setting](const auto& field)
+                                       { return field.first == setting->key(); });
+        if (setting->isRequired() && setting->isEmpty() && !given)
+        {
+            problems.push_back({setting->key(), {Setting::Problem::Required, {}}});
+        }
+    }
+    return problems;
+}
+
+std::vector<Settings::FieldProblem>
 Settings::apply(const std::vector<std::pair<std::string, std::string>>& fields)
 {
     std::vector<FieldProblem> problems = check(fields);

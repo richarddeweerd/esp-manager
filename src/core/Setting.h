@@ -169,6 +169,8 @@ private:
 
 // A short English name for logs, such as "out of range".
 const char* toString(Setting::Problem problem);
+// The code the web pages turn into their own text, such as "out-of-range".
+const char* errorCode(Setting::Problem problem);
 
 namespace detail
 {

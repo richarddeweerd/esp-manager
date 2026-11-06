@@ -58,7 +58,17 @@
     "full": "The device can't keep more networks. Remove one first.",
     "last-network": "This is the device's only network. To forget it, use Network Reset on the Device tab.",
     "not-found": "That network isn't saved any more. The list has been updated.",
-    "position": "The device didn't accept the new order. Reload the page and try again."
+    "position": "The device didn't accept the new order. Reload the page and try again.",
+    "required": "Enter a value.",
+    "too-long": "This is too long.",
+    "invalid-character": "This contains a character that isn't allowed.",
+    "not-a-number": "Enter a whole number.",
+    "out-of-range": "This number is outside the allowed range.",
+    "not-a-checkbox": "The device didn't accept this. Reload the page and try again.",
+    "unknown-option": "Choose one of the options.",
+    "rejected": "The device didn't accept this value.",
+    "unknown-setting": "The device didn't accept this. Reload the page and try again.",
+    "not-stored": "The device couldn't save this. Try again."
   },
   "status": "Status",
   "loading": "Loading…",
@@ -129,5 +139,14 @@
       "button": "Erase everything",
       "done": "The device is erasing everything and restarting. Join its setup Wi-Fi network to set it up again."
     }
-  }
+  },
+  "settings": "Settings",
+  "settingsLead": "Set up this device. Changes are saved when you press Save.",
+  "settingsWizardLead": "Set up this device.",
+  "general": "General",
+  "settingsSaved": "Saved.",
+  "needsAttention": "needs attention",
+  "clearPassword": "Remove the stored password",
+  "keepPassword": "Leave empty to keep the stored password.",
+  "noSelection": "Choose…"
 }

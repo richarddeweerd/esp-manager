@@ -24,3 +24,8 @@
 .net .icon:disabled { opacity: .3; cursor: default; }
 .net .icon.bad { color: var(--bad); }
 .net .btn { min-height: 0; padding: 8px 12px; }
+.wizard h3 { font-size: 18px; margin: 24px 0 4px; font-weight: 600; }
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 13px; color: var(--bad);
+  border: 1px solid var(--bad); }
+.hint { margin: 0; font-size: 13px; }
+.check.setting { margin: 16px 0; font-size: 16px; color: inherit; }

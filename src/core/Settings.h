@@ -138,6 +138,11 @@ public:
     // all are fine. A Setting that isn't mentioned isn't checked.
     std::vector<FieldProblem> check(const std::vector<std::pair<std::string, std::string>>& fields);
 
+    // The required Settings that are empty and that `fields` doesn't give a value. For first
+    // setup, where the Owner has to fill them in.
+    std::vector<FieldProblem>
+    missingRequired(const std::vector<std::pair<std::string, std::string>>& fields) const;
+
     // Stores values as the web pages send them, all or nothing, and reports the ones that changed.
     // Empty if they were stored.
     std::vector<FieldProblem> apply(const std::vector<std::pair<std::string, std::string>>& fields);

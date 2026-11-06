@@ -32,6 +32,15 @@ const S = {
   removing: "",
   listError: "",
   leftSaved: false,
+  // From GET /api/settings (null until loaded). During first setup the wizard has a screen per
+  // Section, and the page keeps what the Owner entered until it sends it with the network:
+  // values by key as text, passwords to remove, errors by key, and the Section on screen.
+  settings: null,
+  values: {},
+  clears: {},
+  settingErrors: {},
+  sectionIndex: 0,
+  settingsNote: "",
 };
 
 // How long the page keeps asking for the result while the phone may be off the access point.
@@ -86,8 +95,97 @@ async function changeSaved(path, fields) {
   } else render();
 }
 
-// 1 when the wizard has the Management Interface step, 0 otherwise.
-const extra = () => (S.management === "off" ? 0 : 1);
+async function loadSettings() {
+  try {
+    showSettings(await getJson("/api/settings"));
+  } catch (error) {
+    setTimeout(loadSettings, 1500);
+    return;
+  }
+  if (S.screen === "list") render();
+}
+
+function showSettings(data) {
+  S.settings = data;
+  S.values = {};
+  S.clears = {};
+  for (const section of data.sections) {
+    for (const setting of section.settings) {
+      S.values[setting.key] = setting.type === "password" ? "" : setting.value;
+    }
+  }
+}
+
+const sections = () => (S.settings ? S.settings.sections : []);
+
+// The Section screens of the wizard: only during first setup, without Saved Networks.
+const wizardSections = () => (S.saved && S.saved.length ? [] : sections());
+
+const hasManagement = () => S.management !== "off";
+
+// How many steps the wizard has on top of the network ones.
+const extra = () => (hasManagement() ? 1 : 0) + wizardSections().length;
+
+// The form fields for the Settings in these Sections.
+function settingFormFields(list) {
+  const fields = {};
+  for (const section of list) {
+    for (const setting of section.settings) {
+      if (S.clears[setting.key]) fields[`clear.${setting.key}`] = "1";
+      else fields[`setting.${setting.key}`] = S.values[setting.key];
+    }
+  }
+  return fields;
+}
+
+function showSettingErrors(errors) {
+  S.settingErrors = {};
+  for (const problem of errors) {
+    S.settingErrors[problem.key] = problem.message || STRINGS.errors[problem.error] || STRINGS.errors.other;
+  }
+}
+
+// Saves the Settings of a device that already has Saved Networks.
+async function saveSettings() {
+  S.settingErrors = {};
+  S.settingsNote = "";
+  S.error = "";
+  try {
+    const answer = await postForm("/api/settings", settingFormFields(sections()));
+    if (answer.ok) {
+      showSettings(answer.data);
+      S.settingsNote = STRINGS.settingsSaved;
+    } else if (answer.data.errors) showSettingErrors(answer.data.errors);
+    else S.error = STRINGS.errors.other;
+  } catch (error) {
+    S.error = STRINGS.errors.unreachable;
+  }
+  render();
+}
+
+// Checks the Section on screen, then moves on to the next one or connects.
+async function nextSection() {
+  S.settingErrors = {};
+  S.error = "";
+  const list = wizardSections();
+  try {
+    const answer = await postForm("/api/settings/check", settingFormFields([list[S.sectionIndex]]));
+    if (!answer.ok) {
+      if (answer.data.errors) showSettingErrors(answer.data.errors);
+      else S.error = STRINGS.errors.other;
+      render();
+      return;
+    }
+  } catch (error) {
+    S.error = STRINGS.errors.unreachable;
+    render();
+    return;
+  }
+  if (S.sectionIndex < list.length - 1) {
+    S.sectionIndex += 1;
+    go("settings");
+  } else submit(false);
+}
 
 // Asks for the network list until the device's scan has finished.
 let scanTimer = 0;
@@ -111,10 +209,11 @@ async function loadNetworks(refresh) {
 // fail meanwhile are retried until RESULT_TIMEOUT_MS.
 async function submit(saveAnyway) {
   const fields = { ssid: S.ssid, password: S.secured || S.hidden ? S.password : "" };
-  if (extra()) fields.managementPassword = S.managementPassword;
+  if (hasManagement()) fields.managementPassword = S.managementPassword;
   if (saveAnyway) fields.saveAnyway = "1";
+  Object.assign(fields, settingFormFields(wizardSections()));
   // Where the Owner fixes what's wrong.
-  const form = extra() ? "management" : "password";
+  const form = hasManagement() ? "management" : "password";
   let answer;
   try {
     answer = await postForm("/api/connect", fields);
@@ -129,6 +228,16 @@ async function submit(saveAnyway) {
       S.listError = STRINGS.errors.full;
       go("list");
       return;
+    }
+    if (code === "settings") {
+      showSettingErrors(answer.data.errors);
+      const at = wizardSections().findIndex((section) =>
+        section.settings.some((setting) => S.settingErrors[setting.key]));
+      if (at >= 0) {
+        S.sectionIndex = at;
+        go("settings");
+        return;
+      }
     }
     S.error = STRINGS.errors[code] || STRINGS.errors.other;
     go(code === "management-password-invalid" ? "management" : code.startsWith("ssid") ||
@@ -172,7 +281,79 @@ function lock(secured) {
     : `<span class="lock muted">${esc(STRINGS.open)}</span>`;
 }
 
+// One Setting's field, with its error if it has one.
+function settingField(setting) {
+  const key = esc(setting.key);
+  const id = `setting-${key}`;
+  const value = S.values[setting.key];
+  const label = esc(setting.label);
+  const problem = S.settingErrors[setting.key];
+  const error = problem ? `<p class="error">${esc(problem)}</p>` : "";
+  if (setting.type === "checkbox") {
+    return `<label class="check setting"><input type="checkbox" id="${id}" data-setting="${key}"
+      ${value === "1" ? "checked" : ""}> ${label}</label>${error}`;
+  }
+  let control;
+  let after = "";
+  if (setting.type === "select") {
+    const blank = value === "" || !setting.required
+      ? `<option value="">${esc(STRINGS.noSelection)}</option>` : "";
+    const options = setting.options.map((option) => `<option value="${esc(option.value)}"
+      ${option.value === value ? "selected" : ""}>${esc(option.label)}</option>`).join("");
+    control = `<select id="${id}" data-setting="${key}">${blank}${options}</select>`;
+  } else if (setting.type === "number") {
+    control = `<input id="${id}" data-setting="${key}" type="number" inputmode="numeric"
+      min="${setting.min}" max="${setting.max}" value="${esc(value)}">`;
+  } else if (setting.type === "password") {
+    control = `<input id="${id}" data-setting="${key}" type="${S.showPassword ? "text" : "password"}"
+      autocomplete="new-password" autocapitalize="none" maxlength="${setting.maxLength}" value="${esc(value)}">`;
+    if (setting.set) {
+      after = `<p class="muted hint">${esc(STRINGS.keepPassword)}</p>`;
+      if (!setting.required) {
+        after += `<label class="check"><input type="checkbox" data-clear="${key}"
+          ${S.clears[setting.key] ? "checked" : ""}> ${esc(STRINGS.clearPassword)}</label>`;
+      }
+    }
+  } else {
+    control = `<input id="${id}" data-setting="${key}" autocomplete="off" autocapitalize="none"
+      maxlength="${setting.maxLength}" value="${esc(value)}">`;
+  }
+  return `<div class="field"><label for="${id}">${label}</label>${control}${after}</div>${error}`;
+}
+
+// The fields of a Section, with "Show password" if it has a password.
+function settingFields(section) {
+  const toggle = section.settings.some((setting) => setting.type === "password")
+    ? `<label class="check"><input type="checkbox" data-act="toggle" ${S.showPassword ? "checked" : ""}>
+        ${esc(STRINGS.showPassword)}</label>` : "";
+  return section.settings.map(settingField).join("") + toggle;
+}
+
+const sectionTitle = (section) => section.title || STRINGS.general;
+
 const screens = {
+  settings() {
+    const list = wizardSections();
+    const section = list[S.sectionIndex];
+    const last = S.sectionIndex === list.length - 1;
+    const error = S.error ? `<p class="error">${esc(S.error)}</p>` : "";
+    return [3 + (hasManagement() ? 1 : 0) + S.sectionIndex, `<h2>${esc(sectionTitle(section))}</h2>
+      <p class="lead">${esc(STRINGS.settingsWizardLead)}</p>${settingFields(section)}${error}
+      <div class="foot"><button class="btn block" data-act="settingsNext">${esc(last ? STRINGS.connect : STRINGS.next)}</button>
+        <button class="btn link" data-act="settingsBack">← ${esc(STRINGS.back)}</button></div>`];
+  },
+
+  editSettings() {
+    const body = sections().map((section) =>
+      `<h3>${esc(sectionTitle(section))}</h3>${settingFields(section)}`).join("");
+    const error = S.error ? `<p class="error">${esc(S.error)}</p>` : "";
+    const note = S.settingsNote ? `<p class="muted">${esc(S.settingsNote)}</p>` : "";
+    return [0, `<h2>${esc(STRINGS.settings)}</h2><p class="lead">${esc(STRINGS.settingsLead)}</p>
+      ${body}${error}${note}
+      <div class="foot"><button class="btn block" data-act="saveSettings">${esc(STRINGS.save)}</button>
+        <button class="btn link" data-act="closeSettings">← ${esc(STRINGS.savedNetworks)}</button></div>`];
+  },
+
   list() {
     const last = S.saved.length - 1;
     const items = S.saved.map((network, i) => {
@@ -194,9 +375,13 @@ const screens = {
     const add = S.saved.length >= S.max
       ? `<p class="muted">${esc(STRINGS.listFull.replace("{max}", S.max))}</p>`
       : `<button class="btn block" data-act="add">${esc(STRINGS.addNetwork)}</button>`;
+    const badge = S.settings && !S.settings.complete
+      ? `<span class="badge">${esc(STRINGS.needsAttention)}</span>` : "";
+    const settings = sections().length ? `<button class="net" data-act="openSettings">
+      <span class="name">${esc(STRINGS.settings)}</span>${badge}</button>` : "";
     return [0, `<h2>${esc(STRINGS.savedNetworks)}</h2>
       <p class="lead">${esc(STRINGS.savedNetworksLead)}</p>
-      <div class="list">${items}</div>${error}<div class="foot">${add}</div>`];
+      <div class="list">${items}</div>${error}<div class="foot">${add}${settings}</div>`];
   },
 
   networks() {
@@ -247,7 +432,7 @@ const screens = {
           maxlength="63" value="${esc(S.managementRepeat)}"></div>
       <label class="check"><input type="checkbox" data-act="toggle" ${S.showPassword ? "checked" : ""}>
         ${esc(STRINGS.showPassword)}</label>${error}
-      <div class="foot"><button class="btn block" data-act="finish">${esc(STRINGS.connect)}</button>
+      <div class="foot"><button class="btn block" data-act="finish">${esc(wizardSections().length ? STRINGS.next : STRINGS.connect)}</button>
         <button class="btn link" data-act="backToNetwork">← ${esc(STRINGS.back)}</button></div>`];
   },
 
@@ -268,7 +453,7 @@ const screens = {
   },
 
   done() {
-    const later = extra() ? `<div class="note">${esc(STRINGS.managementLater
+    const later = hasManagement() ? `<div class="note">${esc(STRINGS.managementLater
       .replace("{ip}", S.ip).replace("{user}", S.user))}</div>` : "";
     return [4 + extra(), `<div class="center"><div class="bigicon ok">✓</div>
       <h2>${esc(STRINGS.doneTitle)}</h2><p class="lead">${esc(STRINGS.doneLead)}</p></div>
@@ -295,11 +480,11 @@ const screens = {
   },
 };
 
-// Shows the current screen; its step (1 to 4, or 5 with the Management Interface step) lights up
-// the step indicator, 0 hides it.
+// Shows the current screen; its step (1 to 4, plus one for the Management Interface and one for
+// each Section) lights up the step indicator, 0 hides it.
 function render() {
   const [step, body] = screens[S.screen]();
-  const all = extra() ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
+  const all = Array.from({ length: 4 + extra() }, (_, i) => i + 1);
   const steps = step ? `<div class="steps">${all.map((i) =>
     `<i class="${i <= step ? "on" : ""}"></i>`).join("")}</div>` : "";
   // The status is one tap away, except while a test runs.
@@ -325,13 +510,30 @@ function readFields() {
   if (password) S.password = password.value;
   if (managementPassword) S.managementPassword = managementPassword.value;
   if (managementRepeat) S.managementRepeat = managementRepeat.value;
+  for (const input of app.querySelectorAll("[data-setting]")) {
+    if (input.type === "checkbox") S.values[input.dataset.setting] = input.checked ? "1" : "0";
+    else S.values[input.dataset.setting] = input.value;
+  }
+  for (const input of app.querySelectorAll("[data-clear]")) {
+    S.clears[input.dataset.clear] = input.checked;
+  }
 }
 
-// The network is complete: on to the Management Interface password, or connect.
+// The network is complete: on to the Management Interface password, or what follows it.
 function next() {
   S.error = "";
-  if (extra()) go("management");
-  else submit(false);
+  if (hasManagement()) go("management");
+  else afterManagement();
+}
+
+// On to the Settings during first setup, or connect.
+function afterManagement() {
+  S.error = "";
+  S.settingErrors = {};
+  if (wizardSections().length) {
+    S.sectionIndex = 0;
+    go("settings");
+  } else submit(false);
 }
 
 // --- Actions ---
@@ -381,7 +583,38 @@ const actions = {
       go("management");
       return;
     }
-    submit(false);
+    afterManagement();
+  },
+  settingsNext() {
+    readFields();
+    nextSection();
+  },
+  settingsBack() {
+    readFields();
+    S.error = "";
+    S.settingErrors = {};
+    if (S.sectionIndex > 0) {
+      S.sectionIndex -= 1;
+      go("settings");
+    } else if (hasManagement()) go("management");
+    else go(S.secured || S.hidden ? "password" : "networks");
+  },
+  openSettings() {
+    S.settingErrors = {};
+    S.settingsNote = "";
+    S.error = "";
+    S.listError = "";
+    go("editSettings");
+  },
+  saveSettings() {
+    readFields();
+    saveSettings();
+  },
+  closeSettings() {
+    // What wasn't saved is dropped.
+    showSettings(S.settings);
+    S.error = "";
+    go("list");
   },
   backToNetwork() {
     readFields();
@@ -482,6 +715,8 @@ app.addEventListener("click", (event) => {
 app.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && event.target.matches("input:not([type=checkbox])")) {
     if (S.screen === "management") actions.finish();
+    else if (S.screen === "settings") actions.settingsNext();
+    else if (S.screen === "editSettings") actions.saveSettings();
     else actions.connect();
   }
 });
@@ -490,4 +725,5 @@ document.title = STRINGS.title;
 render();
 loadSetup();
 loadSaved();
+loadSettings();
 loadNetworks(false);
