@@ -42,6 +42,11 @@ const char* typeName(Setting::Type type)
     }
 }
 
+bool shownOn(WebRoutes::Site site, const Setting& setting)
+{
+    return site != WebRoutes::Site::Management || setting.isEditableInManagement();
+}
+
 void writeSetting(JsonWriter& json, const Setting& setting)
 {
     json.beginObject()
@@ -105,11 +110,11 @@ void writeSetting(JsonWriter& json, const Setting& setting)
 void SettingsApi::registerRoutes(WebRoutes::Site site, Authorize authorize)
 {
     routes_.on(site, HttpMethod::Get, "/api/settings",
-               [this, authorize](const HttpRequest& request)
+               [this, site, authorize](const HttpRequest& request)
                {
                    if (authorize(request))
                    {
-                       sendSettings();
+                       sendSettings(site);
                    }
                });
     // A change is allowed for an authorised request that comes from the page itself.
@@ -117,7 +122,7 @@ void SettingsApi::registerRoutes(WebRoutes::Site site, Authorize authorize)
         [this, site, authorize](const char* path, std::function<void(const Fields&)> action)
     {
         routes_.on(site, HttpMethod::Post, path,
-                   [this, authorize, action](const HttpRequest& request)
+                   [this, site, authorize, action](const HttpRequest& request)
                    {
                        if (!authorize(request))
                        {
@@ -126,19 +131,33 @@ void SettingsApi::registerRoutes(WebRoutes::Site site, Authorize authorize)
                        if (request.header("X-Requested-With").value_or("") != "EspManager")
                        {
                            log_.warn("settings", "refused a request without X-Requested-With");
-                           routes_.http().send(403, "text/plain", "Use the setup page.");
+                           routes_.http().send(403, "text/plain",
+                                               site == WebRoutes::Site::Management
+                                                   ? "Use the management page."
+                                                   : "Use the setup page.");
                            return;
+                       }
+                       // Before fieldsFrom(), which drops an empty password and turns a clear
+                       // into a value.
+                       if (site == WebRoutes::Site::Management)
+                       {
+                           const std::vector<Settings::FieldProblem> hidden = hiddenFields(request);
+                           if (!hidden.empty())
+                           {
+                               sendProblems(400, hidden);
+                               return;
+                           }
                        }
                        action(fieldsFrom(request));
                    });
     };
     onPost("/api/settings",
-           [this](const Fields& fields)
+           [this, site](const Fields& fields)
            {
                const std::vector<Settings::FieldProblem> problems = settings_.apply(fields);
                if (problems.empty())
                {
-                   sendSettings();
+                   sendSettings(site);
                    return;
                }
                const bool notStored = problems[0].check.problem == Setting::Problem::NotStored;
@@ -187,20 +206,59 @@ SettingsApi::Fields SettingsApi::fieldsFrom(const HttpRequest& request) const
     return fields;
 }
 
-void SettingsApi::sendSettings()
+std::vector<Settings::FieldProblem> SettingsApi::hiddenFields(const HttpRequest& request) const
 {
-    JsonWriter json;
-    json.beginObject().key("complete").boolean(settings_.complete()).key("sections").beginArray();
+    std::vector<Settings::FieldProblem> problems;
+    for (const auto& [name, value] : request.args)
+    {
+        std::string key;
+        if (!afterPrefix(name, kFieldPrefix, key) && !afterPrefix(name, kClearPrefix, key))
+        {
+            continue;
+        }
+        const Setting* const setting = settings_.find(key);
+        if (setting == nullptr || !shownOn(WebRoutes::Site::Management, *setting))
+        {
+            problems.push_back({key, {Setting::Problem::UnknownSetting, {}}});
+        }
+    }
+    return problems;
+}
+
+void SettingsApi::sendSettings(WebRoutes::Site site)
+{
+    bool complete = true;
     for (const SettingsSection& section : settings_.sections())
     {
-        if (section.settings().empty())
+        for (const Setting* const setting : section.settings())
+        {
+            complete = complete &&
+                       !(shownOn(site, *setting) && setting->isRequired() && setting->isEmpty());
+        }
+    }
+    JsonWriter json;
+    json.beginObject()
+        .key("complete")
+        .boolean(complete)
+        .key("hasSettings")
+        .boolean(settings_.count() > 0)
+        .key("sections")
+        .beginArray();
+    for (const SettingsSection& section : settings_.sections())
+    {
+        const std::vector<Setting*>& settings = section.settings();
+        if (std::none_of(settings.begin(), settings.end(),
+                         [site](const Setting* setting) { return shownOn(site, *setting); }))
         {
             continue;
         }
         json.beginObject().key("title").string(section.title()).key("settings").beginArray();
-        for (const Setting* const setting : section.settings())
+        for (const Setting* const setting : settings)
         {
-            writeSetting(json, *setting);
+            if (shownOn(site, *setting))
+            {
+                writeSetting(json, *setting);
+            }
         }
         json.endArray().endObject();
     }

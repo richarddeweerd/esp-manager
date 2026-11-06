@@ -5,6 +5,7 @@
 #include "core/DigestAuth.h"
 #include "core/Logger.h"
 #include "core/SavedNetworksApi.h"
+#include "core/SettingsApi.h"
 #include "core/Storage.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
@@ -17,8 +18,8 @@ namespace espmgr
 
 // The Management Interface (EP03): web pages on the station's network where the Owner sees the
 // device's status and manages its Saved Networks (adding one saves it without a test, since
-// testing would drop the Owner's own connection) and, in later versions, its Settings. Reached
-// through esp.management().
+// testing would drop the Owner's own connection) and edits the Settings the Developer marked
+// .editableInManagement(). Reached through esp.management().
 //
 // It's off unless the Developer enables it, and always password-protected with HTTP Digest
 // authentication. The Owner chooses the password in the Provisioning Portal; only its Digest
@@ -31,7 +32,9 @@ namespace espmgr
 // The Device tab restarts the device and starts a Network Reset or a Factory Reset (EP09). These
 // are POST requests that must also carry the header `X-Requested-With: EspManager`: another
 // web site can't add it, so it can't trigger them through the Owner's browser, which may
-// remember the password. Each runs a moment after its answer has gone out.
+// remember the password. Each runs a moment after its answer has gone out. A Settings Reset
+// works the same way but runs at once, because the device stays as it is and the answer can say
+// whether it worked.
 class ManagementInterface
 {
 public:
@@ -41,6 +44,7 @@ public:
         std::function<void()> restart;
         std::function<void()> networkReset;
         std::function<void()> factoryReset;
+        std::function<bool()> settingsReset;
     };
 
     // How long an action waits after its answer.
@@ -50,12 +54,12 @@ public:
     static constexpr const char* kStorageNamespace = "espmgr-mgmt";
 
     // `deviceName` gives the default realm, `status` what GET /api/status shows.
-    ManagementInterface(WebRoutes& routes, SavedNetworksApi& networksApi, Storage& storage,
-                        Clock& clock, WifiConnection& connection, Logger& log,
+    ManagementInterface(WebRoutes& routes, SavedNetworksApi& networksApi, SettingsApi& settingsApi,
+                        Storage& storage, Clock& clock, WifiConnection& connection, Logger& log,
                         std::function<std::string()> deviceName,
                         std::function<DeviceStatus()> status, Actions actions)
-        : routes_(routes), networksApi_(networksApi), storage_(storage), clock_(clock),
-          connection_(connection), log_(log), deviceName_(std::move(deviceName)),
+        : routes_(routes), networksApi_(networksApi), settingsApi_(settingsApi), storage_(storage),
+          clock_(clock), connection_(connection), log_(log), deviceName_(std::move(deviceName)),
           status_(std::move(status)), actions_(std::move(actions)), auth_(clock)
     {
     }
@@ -113,6 +117,8 @@ private:
     // True if `request` carries the Owner's credentials. Otherwise answers it with the 401
     // challenge itself.
     bool authorize(const HttpRequest& request);
+    // authorize(), and the request comes from the page itself. Otherwise answers it.
+    bool allowAction(const HttpRequest& request, const char* name);
     // POST /api/restart, /api/network-reset and /api/factory-reset.
     void registerAction(const char* path, const char* name,
                         std::function<void()> Actions::* action);
@@ -120,6 +126,7 @@ private:
 
     WebRoutes& routes_;
     SavedNetworksApi& networksApi_;
+    SettingsApi& settingsApi_;
     Storage& storage_;
     Clock& clock_;
     WifiConnection& connection_;

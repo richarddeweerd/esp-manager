@@ -117,7 +117,7 @@ void test_the_page_gets_the_sections_and_fields()
     const FakeHttpServer::Response response = d.get();
     TEST_ASSERT_EQUAL_INT(200, response.status);
     TEST_ASSERT_EQUAL_STRING(
-        R"({"complete":false,"sections":[)"
+        R"({"complete":false,"hasSettings":true,"sections":[)"
         R"({"title":"MQTT","settings":[)"
         R"({"key":"host","label":"Server","type":"text","required":true,"value":"","maxLength":64},)"
         R"({"key":"port","label":"Port","type":"number","required":false,"value":"1883","min":1,"max":65535},)"
@@ -146,7 +146,7 @@ void test_a_sketch_without_settings_gets_an_empty_list()
     EspManager esp(fakes.platform);
     esp.begin();
     esp.process();
-    TEST_ASSERT_EQUAL_STRING(R"({"complete":true,"sections":[]})",
+    TEST_ASSERT_EQUAL_STRING(R"({"complete":true,"hasSettings":false,"sections":[]})",
                              fakes.http.request(HttpMethod::Get, "/api/settings").body.c_str());
 }
 

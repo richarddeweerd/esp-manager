@@ -20,11 +20,23 @@ const S = {
   // The Wi-Fi tab's sheet: { kind: "add", ssid, password, show, error, busy } or
   // { kind: "remove", ssid, error, busy }.
   netSheet: null,
+  // The Settings this site shows (null until loaded), for the common form code. settingsLoaded is
+  // false while the Settings tab waits for fresh values, settingsError holds why a save failed,
+  // and settingsNote says that one worked.
+  settings: null,
+  values: {},
+  clears: {},
+  settingErrors: {},
+  showPassword: false,
+  settingsLoaded: false,
+  settingsError: "",
+  settingsNote: "",
 };
 
 // What the Device tab can do: [request, strings key, whether it erases something].
 const ACTIONS = {
   restart: ["/api/restart", "restart", false],
+  settingsReset: ["/api/settings-reset", "settingsReset", true],
   networkReset: ["/api/network-reset", "networkReset", true],
   factoryReset: ["/api/factory-reset", "factoryReset", true],
 };
@@ -34,6 +46,7 @@ const ACTIONS = {
 // Keeps the status up to date: every tab shows part of it.
 async function loadStatus() {
   for (;;) {
+    const first = !S.status;
     try {
       S.status = await getJson("/api/status");
       S.error = false;
@@ -41,7 +54,7 @@ async function loadStatus() {
       S.error = true;
     }
     // Drawing again would throw away what the Owner is typing.
-    if (!S.netSheet) render();
+    if (first || !typing()) render();
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
 }
@@ -53,6 +66,38 @@ async function runAction(key) {
     S.actionState = (await postForm(ACTIONS[key][0], {})).ok ? "done" : "failed";
   } catch (error) {
     S.actionState = "failed";
+  }
+  if (key === "settingsReset") loadSettings();
+  render();
+}
+
+const typing = () => S.netSheet || S.tab === "settings";
+
+async function loadSettings() {
+  try {
+    showSettings(S, await getJson("/api/settings"));
+    S.settingsLoaded = true;
+  } catch (error) {
+    setTimeout(loadSettings, 1500);
+    return;
+  }
+  if (!S.netSheet) render();
+}
+
+async function saveSettings() {
+  readSettingFields(S, app);
+  S.settingErrors = {};
+  S.settingsError = "";
+  S.settingsNote = "";
+  try {
+    const answer = await postForm("/api/settings", settingFormFields(S, S.settings.sections));
+    if (answer.ok) {
+      showSettings(S, answer.data);
+      S.settingsNote = STRINGS.settingsSaved;
+    } else if (answer.data.errors) showSettingErrors(S, answer.data.errors);
+    else S.settingsError = STRINGS.errors.actionFailed;
+  } catch (error) {
+    S.settingsError = STRINGS.errors.unreachableManagement;
   }
   render();
 }
@@ -69,7 +114,7 @@ async function loadNetworks() {
   } catch (error) {
     S.error = true;
   }
-  render();
+  if (!typing()) render();
 }
 
 // Sends a change to the list. Every answer that isn't a refusal is the new list. Returns the
@@ -175,6 +220,18 @@ const tabs = {
       <h3>${esc(STRINGS.details)}</h3><div class="rows">${statusList(s)}</div>`;
   },
 
+  settings() {
+    if (!S.settingsLoaded) return `<p class="muted">${esc(STRINGS.loading)}</p>`;
+    const badge = S.settings.complete ? ""
+      : ` <span class="badge warn">${esc(STRINGS.needsAttention)}</span>`;
+    const body = S.settings.sections.map((section) =>
+      `<h3>${esc(sectionTitle(section))}</h3>${settingFields(S, section)}`).join("");
+    const error = S.settingsError ? `<p class="error">${esc(S.settingsError)}</p>` : "";
+    const note = S.settingsNote ? `<p class="muted">${esc(S.settingsNote)}</p>` : "";
+    return `<p class="lead">${esc(STRINGS.settingsLead)}${badge}</p>${body}${error}${note}
+      <div class="foot"><button class="btn block" data-save-settings="1">${esc(STRINGS.save)}</button></div>`;
+  },
+
   device(s) {
     const rows = [
       [STRINGS.hostname, s.hostname],
@@ -183,7 +240,9 @@ const tabs = {
       [STRINGS.firmware, s.firmware || "–"],
       [STRINGS.library, `EspManager ${s.library}`],
     ];
-    const actions = Object.entries(ACTIONS).map(([key, [, name, erases]]) =>
+    const offered = Object.entries(ACTIONS).filter(([key]) =>
+      key !== "settingsReset" || (S.settings && S.settings.hasSettings));
+    const actions = offered.map(([key, [, name, erases]]) =>
       `<button class="row${erases ? " bad" : ""}" data-action="${key}"><span class="name">${esc(STRINGS.actions[name].title)}</span>›</button>`).join("");
     return `<h3>${esc(STRINGS.device)}</h3><div class="rows"><dl class="kv">${rows.map(([label, value]) =>
       `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join("")}</dl></div>
@@ -191,7 +250,12 @@ const tabs = {
   },
 };
 
-const TABS = [["wifi", "📶", STRINGS.wifi], ["status", "ⓘ", STRINGS.status], ["device", "⚙", STRINGS.device]];
+// The Settings tab is there only when the Developer marked a Setting for this site.
+function visibleTabs() {
+  const settings = S.settings && S.settings.sections.length ? [["settings", "☰", STRINGS.settings]] : [];
+  return [["wifi", "📶", STRINGS.wifi], ["status", "ⓘ", STRINGS.status], ...settings,
+    ["device", "⚙", STRINGS.device]];
+}
 
 // The Wi-Fi tab's sheets: adding a network, and confirming a removal.
 function networkSheet() {
@@ -234,14 +298,18 @@ function sheet() {
   } else if (S.actionState === "busy") {
     body = `<div class="center"><div class="spinner"></div><h2>${esc(text.title)}</h2></div>`;
   } else if (S.actionState === "done") {
+    // Only a Settings Reset leaves the device as it was, with the page still of use.
+    const close = S.action === "settingsReset"
+      ? `<div class="foot"><button class="btn secondary block" data-sheet="cancel">${esc(STRINGS.close)}</button></div>` : "";
     body = `<div class="center"><div class="bigicon ok">✓</div><h2>${esc(text.title)}</h2>
-      <p class="lead">${esc(text.done)}</p></div>`;
+      <p class="lead">${esc(text.done)}</p></div>${close}`;
   } else {
     body = `<div class="center"><div class="bigicon bad">✕</div><h2>${esc(text.title)}</h2>
       <p class="lead">${esc(STRINGS.errors.actionFailed)}</p></div>
       <div class="foot"><button class="btn secondary block" data-sheet="cancel">${esc(STRINGS.close)}</button></div>`;
   }
-  return `<div class="scrim" data-sheet="${S.actionState === "confirm" || S.actionState === "failed" ? "cancel" : ""}">
+  return `<div class="scrim" data-sheet="${S.actionState === "confirm" || S.actionState === "failed" ||
+    (S.actionState === "done" && S.action === "settingsReset") ? "cancel" : ""}">
     <div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${body}</div></div>`;
 }
 
@@ -250,8 +318,11 @@ function render() {
   const name = s ? s.hostname : "";
   const error = S.error ? `<div class="note">${esc(STRINGS.errors.unreachableManagement)}</div>` : "";
   const content = s ? tabs[S.tab](s) : `<p class="muted">${esc(STRINGS.loading)}</p>`;
-  const nav = TABS.map(([key, icon, label]) =>
-    `<button class="${S.tab === key ? "on" : ""}" data-tab="${key}"><b>${icon}</b>${esc(label)}</button>`).join("");
+  const nav = visibleTabs().map(([key, icon, label]) => {
+    const dot = key === "settings" && !S.settings.complete
+      ? `<i class="dot" title="${esc(STRINGS.needsAttention)}" aria-label="${esc(STRINGS.needsAttention)}"></i>` : "";
+    return `<button class="${S.tab === key ? "on" : ""}" data-tab="${key}"><b>${icon}${dot}</b>${esc(label)}</button>`;
+  }).join("");
   app.innerHTML = `<header class="top"><h1>${esc(STRINGS.manageTitle)}</h1>
     ${name ? `<span class="pill">${esc(name)}</span>` : ""}</header>
     <div class="content">${error}${content}</div><nav class="tabs">${nav}</nav>${sheet()}`;
@@ -275,6 +346,16 @@ app.addEventListener("click", (event) => {
       S.netSheet = null;
       render();
     }
+    return;
+  }
+  if (event.target.closest("[data-act=toggle]")) {
+    readSettingFields(S, app);
+    S.showPassword = !S.showPassword;
+    render();
+    return;
+  }
+  if (event.target.closest("[data-save-settings]")) {
+    saveSettings();
     return;
   }
   const move = event.target.closest("[data-move]");
@@ -305,13 +386,28 @@ app.addEventListener("click", (event) => {
   }
   const tab = event.target.closest("[data-tab]");
   if (!tab) return;
+  // Another tap on the Settings tab mustn't throw away what the Owner entered.
+  if (tab.dataset.tab === S.tab && S.tab === "settings") return;
   S.tab = tab.dataset.tab;
   if (S.tab === "wifi") loadNetworks();
+  if (S.tab === "settings") {
+    // Fresh values, and anything not saved earlier is dropped.
+    S.settingsLoaded = false;
+    S.settingErrors = {};
+    S.settingsError = "";
+    S.settingsNote = "";
+    loadSettings();
+  }
   render();
   window.scrollTo(0, 0);
 });
 
 app.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && S.tab === "settings" && !S.netSheet && !S.action &&
+      event.target.matches("input:not([type=checkbox])")) {
+    saveSettings();
+    return;
+  }
   if (event.key === "Enter" && S.netSheet && S.netSheet.kind === "add" &&
       event.target.matches("input:not([type=checkbox])")) {
     saveNetwork();
@@ -321,3 +417,4 @@ app.addEventListener("keydown", (event) => {
 render();
 loadStatus();
 loadNetworks();
+loadSettings();

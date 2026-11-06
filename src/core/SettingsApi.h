@@ -26,6 +26,10 @@ namespace espmgr
 // the updated Settings, a check with {"ok":true}, and a refusal with
 // {"error":"settings","errors":[{"key":…,"error":"<code>","message":…},…]}. The POST requests
 // must carry the header `X-Requested-With: EspManager`, which another web site can't add.
+//
+// The Management Interface only sees the Settings marked .editableInManagement(): the others are
+// left out of its answers, and a request naming one is refused as if it didn't exist. `complete`
+// covers the Settings that site shows, while `hasSettings` says whether the sketch has any at all.
 class SettingsApi
 {
 public:
@@ -50,7 +54,9 @@ public:
     void sendProblems(int status, const std::vector<Settings::FieldProblem>& problems);
 
 private:
-    void sendSettings();
+    void sendSettings(WebRoutes::Site site);
+    // The fields in `request` naming a Setting that the Management Interface doesn't show.
+    std::vector<Settings::FieldProblem> hiddenFields(const HttpRequest& request) const;
 
     WebRoutes& routes_;
     Settings& settings_;

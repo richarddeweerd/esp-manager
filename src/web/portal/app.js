@@ -97,23 +97,12 @@ async function changeSaved(path, fields) {
 
 async function loadSettings() {
   try {
-    showSettings(await getJson("/api/settings"));
+    showSettings(S, await getJson("/api/settings"));
   } catch (error) {
     setTimeout(loadSettings, 1500);
     return;
   }
   if (S.screen === "list") render();
-}
-
-function showSettings(data) {
-  S.settings = data;
-  S.values = {};
-  S.clears = {};
-  for (const section of data.sections) {
-    for (const setting of section.settings) {
-      S.values[setting.key] = setting.type === "password" ? "" : setting.value;
-    }
-  }
 }
 
 const sections = () => (S.settings ? S.settings.sections : []);
@@ -126,36 +115,17 @@ const hasManagement = () => S.management !== "off";
 // How many steps the wizard has on top of the network ones.
 const extra = () => (hasManagement() ? 1 : 0) + wizardSections().length;
 
-// The form fields for the Settings in these Sections.
-function settingFormFields(list) {
-  const fields = {};
-  for (const section of list) {
-    for (const setting of section.settings) {
-      if (S.clears[setting.key]) fields[`clear.${setting.key}`] = "1";
-      else fields[`setting.${setting.key}`] = S.values[setting.key];
-    }
-  }
-  return fields;
-}
-
-function showSettingErrors(errors) {
-  S.settingErrors = {};
-  for (const problem of errors) {
-    S.settingErrors[problem.key] = problem.message || STRINGS.errors[problem.error] || STRINGS.errors.other;
-  }
-}
-
 // Saves the Settings of a device that already has Saved Networks.
 async function saveSettings() {
   S.settingErrors = {};
   S.settingsNote = "";
   S.error = "";
   try {
-    const answer = await postForm("/api/settings", settingFormFields(sections()));
+    const answer = await postForm("/api/settings", settingFormFields(S, sections()));
     if (answer.ok) {
-      showSettings(answer.data);
+      showSettings(S, answer.data);
       S.settingsNote = STRINGS.settingsSaved;
-    } else if (answer.data.errors) showSettingErrors(answer.data.errors);
+    } else if (answer.data.errors) showSettingErrors(S, answer.data.errors);
     else S.error = STRINGS.errors.other;
   } catch (error) {
     S.error = STRINGS.errors.unreachable;
@@ -169,9 +139,9 @@ async function nextSection() {
   S.error = "";
   const list = wizardSections();
   try {
-    const answer = await postForm("/api/settings/check", settingFormFields([list[S.sectionIndex]]));
+    const answer = await postForm("/api/settings/check", settingFormFields(S, [list[S.sectionIndex]]));
     if (!answer.ok) {
-      if (answer.data.errors) showSettingErrors(answer.data.errors);
+      if (answer.data.errors) showSettingErrors(S, answer.data.errors);
       else S.error = STRINGS.errors.other;
       render();
       return;
@@ -211,7 +181,7 @@ async function submit(saveAnyway) {
   const fields = { ssid: S.ssid, password: S.secured || S.hidden ? S.password : "" };
   if (hasManagement()) fields.managementPassword = S.managementPassword;
   if (saveAnyway) fields.saveAnyway = "1";
-  Object.assign(fields, settingFormFields(wizardSections()));
+  Object.assign(fields, settingFormFields(S, wizardSections()));
   // Where the Owner fixes what's wrong.
   const form = hasManagement() ? "management" : "password";
   let answer;
@@ -230,7 +200,7 @@ async function submit(saveAnyway) {
       return;
     }
     if (code === "settings") {
-      showSettingErrors(answer.data.errors);
+      showSettingErrors(S, answer.data.errors);
       const at = wizardSections().findIndex((section) =>
         section.settings.some((setting) => S.settingErrors[setting.key]));
       if (at >= 0) {
@@ -281,56 +251,6 @@ function lock(secured) {
     : `<span class="lock muted">${esc(STRINGS.open)}</span>`;
 }
 
-// One Setting's field, with its error if it has one.
-function settingField(setting) {
-  const key = esc(setting.key);
-  const id = `setting-${key}`;
-  const value = S.values[setting.key];
-  const label = esc(setting.label);
-  const problem = S.settingErrors[setting.key];
-  const error = problem ? `<p class="error">${esc(problem)}</p>` : "";
-  if (setting.type === "checkbox") {
-    return `<label class="check setting"><input type="checkbox" id="${id}" data-setting="${key}"
-      ${value === "1" ? "checked" : ""}> ${label}</label>${error}`;
-  }
-  let control;
-  let after = "";
-  if (setting.type === "select") {
-    const blank = value === "" || !setting.required
-      ? `<option value="">${esc(STRINGS.noSelection)}</option>` : "";
-    const options = setting.options.map((option) => `<option value="${esc(option.value)}"
-      ${option.value === value ? "selected" : ""}>${esc(option.label)}</option>`).join("");
-    control = `<select id="${id}" data-setting="${key}">${blank}${options}</select>`;
-  } else if (setting.type === "number") {
-    control = `<input id="${id}" data-setting="${key}" type="number" inputmode="numeric"
-      min="${setting.min}" max="${setting.max}" value="${esc(value)}">`;
-  } else if (setting.type === "password") {
-    control = `<input id="${id}" data-setting="${key}" type="${S.showPassword ? "text" : "password"}"
-      autocomplete="new-password" autocapitalize="none" maxlength="${setting.maxLength}" value="${esc(value)}">`;
-    if (setting.set) {
-      after = `<p class="muted hint">${esc(STRINGS.keepPassword)}</p>`;
-      if (!setting.required) {
-        after += `<label class="check"><input type="checkbox" data-clear="${key}"
-          ${S.clears[setting.key] ? "checked" : ""}> ${esc(STRINGS.clearPassword)}</label>`;
-      }
-    }
-  } else {
-    control = `<input id="${id}" data-setting="${key}" autocomplete="off" autocapitalize="none"
-      maxlength="${setting.maxLength}" value="${esc(value)}">`;
-  }
-  return `<div class="field"><label for="${id}">${label}</label>${control}${after}</div>${error}`;
-}
-
-// The fields of a Section, with "Show password" if it has a password.
-function settingFields(section) {
-  const toggle = section.settings.some((setting) => setting.type === "password")
-    ? `<label class="check"><input type="checkbox" data-act="toggle" ${S.showPassword ? "checked" : ""}>
-        ${esc(STRINGS.showPassword)}</label>` : "";
-  return section.settings.map(settingField).join("") + toggle;
-}
-
-const sectionTitle = (section) => section.title || STRINGS.general;
-
 const screens = {
   settings() {
     const list = wizardSections();
@@ -338,14 +258,14 @@ const screens = {
     const last = S.sectionIndex === list.length - 1;
     const error = S.error ? `<p class="error">${esc(S.error)}</p>` : "";
     return [3 + (hasManagement() ? 1 : 0) + S.sectionIndex, `<h2>${esc(sectionTitle(section))}</h2>
-      <p class="lead">${esc(STRINGS.settingsWizardLead)}</p>${settingFields(section)}${error}
+      <p class="lead">${esc(STRINGS.settingsWizardLead)}</p>${settingFields(S, section)}${error}
       <div class="foot"><button class="btn block" data-act="settingsNext">${esc(last ? STRINGS.connect : STRINGS.next)}</button>
         <button class="btn link" data-act="settingsBack">← ${esc(STRINGS.back)}</button></div>`];
   },
 
   editSettings() {
     const body = sections().map((section) =>
-      `<h3>${esc(sectionTitle(section))}</h3>${settingFields(section)}`).join("");
+      `<h3>${esc(sectionTitle(section))}</h3>${settingFields(S, section)}`).join("");
     const error = S.error ? `<p class="error">${esc(S.error)}</p>` : "";
     const note = S.settingsNote ? `<p class="muted">${esc(S.settingsNote)}</p>` : "";
     return [0, `<h2>${esc(STRINGS.settings)}</h2><p class="lead">${esc(STRINGS.settingsLead)}</p>
@@ -510,13 +430,7 @@ function readFields() {
   if (password) S.password = password.value;
   if (managementPassword) S.managementPassword = managementPassword.value;
   if (managementRepeat) S.managementRepeat = managementRepeat.value;
-  for (const input of app.querySelectorAll("[data-setting]")) {
-    if (input.type === "checkbox") S.values[input.dataset.setting] = input.checked ? "1" : "0";
-    else S.values[input.dataset.setting] = input.value;
-  }
-  for (const input of app.querySelectorAll("[data-clear]")) {
-    S.clears[input.dataset.clear] = input.checked;
-  }
+  readSettingFields(S, app);
 }
 
 // The network is complete: on to the Management Interface password, or what follows it.
@@ -612,7 +526,7 @@ const actions = {
   },
   closeSettings() {
     // What wasn't saved is dropped.
-    showSettings(S.settings);
+    showSettings(S, S.settings);
     S.error = "";
     go("list");
   },

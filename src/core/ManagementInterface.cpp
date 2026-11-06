@@ -187,9 +187,22 @@ void ManagementInterface::registerRoutes()
     networksApi_.registerRoutes(Site::Management,
                                 [this](const HttpRequest& request) { return authorize(request); },
                                 {/*add=*/true, /*removeLast=*/false});
+    settingsApi_.registerRoutes(Site::Management,
+                                [this](const HttpRequest& request) { return authorize(request); });
     registerAction("/api/restart", "restart", &Actions::restart);
     registerAction("/api/network-reset", "Network Reset", &Actions::networkReset);
     registerAction("/api/factory-reset", "Factory Reset", &Actions::factoryReset);
+    routes_.on(Site::Management, HttpMethod::Post, "/api/settings-reset",
+               [this](const HttpRequest& request)
+               {
+                   if (!allowAction(request, "Settings Reset"))
+                   {
+                       return;
+                   }
+                   const bool done = actions_.settingsReset();
+                   routes_.http().send(done ? 200 : 500, "application/json",
+                                       done ? "{\"ok\":true}" : "{\"error\":\"not-stored\"}");
+               });
 }
 
 void ManagementInterface::registerAction(const char* path, const char* name,
@@ -198,22 +211,30 @@ void ManagementInterface::registerAction(const char* path, const char* name,
     routes_.on(WebRoutes::Site::Management, HttpMethod::Post, path,
                [this, name, action](const HttpRequest& request)
                {
-                   if (!authorize(request))
+                   if (!allowAction(request, name))
                    {
                        return;
                    }
-                   HttpServer& http = routes_.http();
-                   if (request.header("X-Requested-With").value_or("") != "EspManager")
-                   {
-                       log_.warn("mgmt", "refused %s without X-Requested-With", name);
-                       http.send(403, "text/plain", "Use the management page.");
-                       return;
-                   }
-                   log_.info("mgmt", "%s requested", name);
                    pending_ = actions_.*action;
                    actionAtMs_ = clock_.nowMs() + kActionDelayMs;
-                   http.send(200, "application/json", "{\"ok\":true}");
+                   routes_.http().send(200, "application/json", "{\"ok\":true}");
                });
+}
+
+bool ManagementInterface::allowAction(const HttpRequest& request, const char* name)
+{
+    if (!authorize(request))
+    {
+        return false;
+    }
+    if (request.header("X-Requested-With").value_or("") != "EspManager")
+    {
+        log_.warn("mgmt", "refused %s without X-Requested-With", name);
+        routes_.http().send(403, "text/plain", "Use the management page.");
+        return false;
+    }
+    log_.info("mgmt", "%s requested", name);
+    return true;
 }
 
 bool ManagementInterface::authorize(const HttpRequest& request)

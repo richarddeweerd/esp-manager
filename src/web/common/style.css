@@ -79,3 +79,4 @@ button, input { font: inherit; color: inherit; }
 .kv dd { margin: 0; text-align: right; word-break: break-all; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: var(--space); box-shadow: var(--shadow); margin-bottom: 12px; }
+.check.setting { margin: 16px 0; font-size: 16px; color: inherit; }

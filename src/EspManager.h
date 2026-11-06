@@ -186,16 +186,17 @@ private:
     WebRoutes routes_{platform_.wifi, platform_.http};
     SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
     SettingsApi settingsApi_{routes_, settings_, log_};
-    ManagementInterface management_{
-        routes_,
-        networksApi_,
-        platform_.storage,
-        platform_.clock,
-        connection_,
-        log_,
-        [this] { return hostname(); },
-        [this] { return status(); },
-        {[this] { restart(); }, [this] { networkReset(); }, [this] { factoryReset(); }}};
+    ManagementInterface management_{routes_,
+                                    networksApi_,
+                                    settingsApi_,
+                                    platform_.storage,
+                                    platform_.clock,
+                                    connection_,
+                                    log_,
+                                    [this] { return hostname(); },
+                                    [this] { return status(); },
+                                    {[this] { restart(); }, [this] { networkReset(); }, [this]
+                                     { factoryReset(); }, [this] { return settingsReset(); }}};
     ProvisioningPortal portal_{platform_.wifi,
                                routes_,
                                networksApi_,
