@@ -265,7 +265,14 @@ def run(conn, ssid, password, ssid_b, switcher, timeout_s):
             reset(conn)
             reset_sent = True
 
-        buffer += conn.read(conn.in_waiting or 1)
+        try:
+            buffer += conn.read(conn.in_waiting or 1)
+        except (serial.SerialException, OSError):
+            # A native USB port disappears for a moment when the board restarts.
+            print("==> The port went away, opening it again", flush=True)
+            conn.close()
+            conn = open_port(conn.port)
+            continue
         while b"\n" in buffer:
             raw, buffer = buffer.split(b"\n", 1)
             line = raw.decode(errors="replace").rstrip("\r")
@@ -282,6 +289,8 @@ def run(conn, ssid, password, ssid_b, switcher, timeout_s):
                     conn.write(b"NOWIFI\n")
                     print("==> No test network set; network tests will be ignored", flush=True)
                 answered = True
+            elif line == "ESPMGR-HW RESTARTED":
+                conn.write(b"RESTART OK\n")
             elif line.startswith("ESPMGR-HW HTTP "):
                 outcome = http_checks(line.split(" ", 2)[2])
                 print(f"==> HTTP checks: {outcome}", flush=True)

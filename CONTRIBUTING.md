@@ -44,6 +44,8 @@ ESPMGR_TEST_SSID=<network> ESPMGR_TEST_PASSWORD=<password> \
 
 The test that moves between two Saved Networks also needs `ESPMGR_TEST_SSID_B`, a second network with the same password, and `ESPMGR_TEST_SWITCH`, a command that `run-hw-tests.py` runs with `a` or `b` to make only that network available. Without them it's ignored.
 
+`test_hw_settings` restarts the board halfway, to check that Settings survive on real NVS. Its tests before the restart print their results, and the summary at the end counts only the ones after it; a failure before the restart ends the run there. It also prints what 32 Settings cost in heap and how long reading them takes, which is where the figure in the README comes from.
+
 ## Code
 
 - C++17, formatted with the repository's `.clang-format` (`scripts/check-format.sh` checks it).
