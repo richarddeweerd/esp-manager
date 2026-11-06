@@ -38,6 +38,7 @@ import serial
 
 BAUD = 115200
 RESULT = re.compile(r"^(?P<file>[^:]+):(?P<line>\d+):(?P<name>\w+):(?P<status>PASS|FAIL|IGNORE)(?::\s?(?P<message>.*))?$")
+DNS_ATTEMPTS = 3
 SUMMARY = re.compile(r"^(?P<tests>\d+) Tests (?P<failures>\d+) Failures (?P<ignored>\d+) Ignored")
 
 # Must match test/test_hw_espmanager/test_main.cpp. A password for the rig's board only.
@@ -137,10 +138,16 @@ def portal_checks(ip):
     """Runs the host side of test_portal_refuses_requests_from_the_test_network: the
     Provisioning Portal only answers on its own access point, and its captive DNS server
     answers every name with the access point's address. Returns "ok" or what failed."""
-    try:
-        address = dns_lookup(ip, "connectivitycheck.gstatic.com")
-    except OSError as error:
-        return f"DNS query failed: {error}"
+    # One UDP packet can get lost, so ask again as a phone's resolver would, and say so.
+    for attempt in range(1, DNS_ATTEMPTS + 1):
+        try:
+            address = dns_lookup(ip, "connectivitycheck.gstatic.com", timeout_s=3)
+            print(f"==> DNS attempt {attempt}: answered", flush=True)
+            break
+        except OSError as error:
+            print(f"==> DNS attempt {attempt}: {error}", flush=True)
+            if attempt == DNS_ATTEMPTS:
+                return f"DNS query failed {DNS_ATTEMPTS} times: {error}"
     if address != "192.168.4.1":
         return f"DNS answered {address}, not 192.168.4.1"
     for path in ("/", "/hotspot-detect.html"):
