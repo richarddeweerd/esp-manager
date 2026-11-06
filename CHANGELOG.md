@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
-- Settings (EP06): `esp.settings()` declares text, password, number, checkbox and select Settings, in Sections, each with validation (`.required()`, `.maxLength()`, `.range()`, `.option()`, `.validate()`). Values are stored in NVS only when they differ from the default. `esp.onSettingChanged()` reports changes, `esp.settings().complete()` says whether required ones are filled in, and `esp.settingsReset()` now returns them to their defaults. The Provisioning Portal shows them during first setup, one screen per Section, and from its list of Saved Networks afterwards, through `GET /api/settings`, `POST /api/settings` and `POST /api/settings/check` (#29, #30).
+- Settings (EP06): `esp.settings()` declares text, password, number, checkbox and select Settings, in Sections, each with validation (`.required()`, `.maxLength()`, `.range()`, `.option()`, `.validate()`). Values are stored in NVS only when they differ from the default. `esp.onSettingChanged()` reports changes, `esp.settings().complete()` says whether required ones are filled in, and `esp.settingsReset()` now returns them to their defaults. The Provisioning Portal shows them during first setup, one screen per Section, and from its list of Saved Networks afterwards, through `GET /api/settings`, `POST /api/settings` and `POST /api/settings/check`. Settings marked `.editableInManagement()` appear in a *Settings* tab in the Management Interface, whose Device tab also has a Settings Reset, `POST /api/settings-reset` (#29, #30, #31).
 
 ## [0.1.0] - 2026-11-01
 

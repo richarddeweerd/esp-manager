@@ -53,3 +53,9 @@ button.row:first-child { border-top: 0; }
 .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2);
   color: var(--muted); white-space: nowrap; }
 .hint { font-size: 13px; margin: 8px 2px 0; }
+.badge.warn { color: var(--bad); border: 1px solid var(--bad); background: none; }
+nav.tabs button b { position: relative; }
+.dot { position: absolute; top: 2px; right: -8px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--bad); }
+.content > .lead { color: var(--muted); margin: 6px 0 8px; }
+.content > .foot { display: grid; gap: 8px; padding-top: 16px; }

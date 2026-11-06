@@ -127,6 +127,12 @@
       "button": "Restart",
       "done": "The device is restarting. Reload this page in a few seconds."
     },
+    "settingsReset": {
+      "title": "Settings Reset",
+      "confirm": "All settings go back to their defaults, including any this page doesn't show. Wi-Fi networks and the management password are kept.",
+      "button": "Reset settings",
+      "done": "The settings are back to their defaults."
+    },
     "networkReset": {
       "title": "Network Reset",
       "confirm": "The device forgets every Wi-Fi network it knows and leaves this one. To use it again, join its own Wi-Fi network and set it up from there. Everything else is kept.",
