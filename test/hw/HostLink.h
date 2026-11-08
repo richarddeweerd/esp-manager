@@ -14,6 +14,7 @@
 //   host → board  "RESTART OK"
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <unity.h>
 
 #include <cstdint>
@@ -132,6 +133,108 @@ inline std::string ask(const std::string& request, const std::string& prefix, ui
         delay(2);
     }
     return "";
+}
+
+// --- Wi-Fi event log, for finding out why a connect failed on the rig ---
+//
+// The Wi-Fi stack's events arrive on its own task. Printing them there could land in the middle
+// of a Unity result line and break the host's parsing, so they're kept here and printed by
+// printWifiEvents(), which the tests call from setUp() (the previous result line is complete by
+// then) and after UNITY_END().
+
+struct WifiEventRecord
+{
+    uint32_t atMs;
+    arduino_event_id_t event;
+    uint8_t reason;
+    int8_t rssi;
+    uint8_t channel;
+};
+
+inline constexpr size_t kWifiEventCapacity = 32;
+inline WifiEventRecord wifiEvents[kWifiEventCapacity];
+inline size_t wifiEventCount = 0;
+inline size_t wifiEventsLost = 0;
+inline portMUX_TYPE wifiEventLock = portMUX_INITIALIZER_UNLOCKED;
+
+inline void startWifiEventLog()
+{
+    WiFi.onEvent(
+        [](arduino_event_id_t event, arduino_event_info_t info)
+        {
+            WifiEventRecord record{millis(), event, 0, 0, 0};
+            if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED)
+            {
+                record.reason = info.wifi_sta_disconnected.reason;
+                record.rssi = info.wifi_sta_disconnected.rssi;
+            }
+            else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED)
+            {
+                record.channel = info.wifi_sta_connected.channel;
+            }
+            else if (event != ARDUINO_EVENT_WIFI_STA_GOT_IP &&
+                     event != ARDUINO_EVENT_WIFI_STA_START && event != ARDUINO_EVENT_WIFI_STA_STOP)
+            {
+                return;
+            }
+            portENTER_CRITICAL(&wifiEventLock);
+            if (wifiEventCount < kWifiEventCapacity)
+            {
+                wifiEvents[wifiEventCount++] = record;
+            }
+            else
+            {
+                ++wifiEventsLost;
+            }
+            portEXIT_CRITICAL(&wifiEventLock);
+        });
+}
+
+// Prints the events kept since the last call, one "wifi <ms> …" line each, and forgets them.
+inline void printWifiEvents()
+{
+    WifiEventRecord copy[kWifiEventCapacity];
+    portENTER_CRITICAL(&wifiEventLock);
+    const size_t count = wifiEventCount;
+    const size_t lost = wifiEventsLost;
+    for (size_t i = 0; i < count; ++i)
+    {
+        copy[i] = wifiEvents[i];
+    }
+    wifiEventCount = 0;
+    wifiEventsLost = 0;
+    portEXIT_CRITICAL(&wifiEventLock);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        const WifiEventRecord& r = copy[i];
+        switch (r.event)
+        {
+        case ARDUINO_EVENT_WIFI_STA_START:
+            Serial.printf("wifi %lu station started\n", static_cast<unsigned long>(r.atMs));
+            break;
+        case ARDUINO_EVENT_WIFI_STA_STOP:
+            Serial.printf("wifi %lu station stopped\n", static_cast<unsigned long>(r.atMs));
+            break;
+        case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+            Serial.printf("wifi %lu associated, channel %u\n", static_cast<unsigned long>(r.atMs),
+                          r.channel);
+            break;
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            Serial.printf("wifi %lu got an address\n", static_cast<unsigned long>(r.atMs));
+            break;
+        default:
+            Serial.printf("wifi %lu disconnected, reason %u (%s), rssi %d\n",
+                          static_cast<unsigned long>(r.atMs), r.reason,
+                          WiFi.disconnectReasonName(static_cast<wifi_err_reason_t>(r.reason)),
+                          r.rssi);
+            break;
+        }
+    }
+    if (lost > 0)
+    {
+        Serial.printf("wifi %u more events not kept\n", static_cast<unsigned>(lost));
+    }
 }
 
 // Ignores the calling test when the host sent no network.
