@@ -7,6 +7,11 @@
 //
 // A second SSID means the host can switch its access point to that name, with the same
 // password: "ESPMGR-HW SWITCH b" (or "a" for the first) → "SWITCH DONE <outcome>".
+//
+// A test that restarts the board says so again when it's back, because output sent before the
+// host has reopened a native USB port is lost:
+//   board → host  "ESPMGR-HW RESTARTED"       repeated until the host answers
+//   host → board  "RESTART OK"
 
 #include <Arduino.h>
 #include <unity.h>
@@ -86,6 +91,22 @@ inline void askForNetwork(uint32_t timeoutMs)
             return;
         }
         if (line == "NOWIFI")
+        {
+            return;
+        }
+    }
+}
+
+// After a restart: waits until the host is listening again, giving up after `timeoutMs` (a plain
+// `pio test`).
+inline void waitForHostAfterRestart(uint32_t timeoutMs)
+{
+    const uint32_t start = millis();
+    std::string line;
+    while (millis() - start < timeoutMs)
+    {
+        Serial.println("ESPMGR-HW RESTARTED");
+        if (readLine(line, 500) && line == "RESTART OK")
         {
             return;
         }
