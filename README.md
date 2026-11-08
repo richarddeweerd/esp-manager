@@ -58,7 +58,7 @@ The README uses a few words in a fixed sense:
 
 ### 1. Install
 
-With [PlatformIO](https://platformio.org/), add the library and the pioarduino platform to your `platformio.ini`. EspManager needs Arduino-ESP32 core 3.x, which PlatformIO's own `espressif32` platform doesn't ship; [pioarduino](https://github.com/pioarduino/platform-espressif32) does. This is the release the library is built and tested with:
+With [PlatformIO](https://platformio.org/), add the library from the [PlatformIO Registry](https://registry.platformio.org/libraries/richarddeweerd/EspManager) and the pioarduino platform to your `platformio.ini`. EspManager needs Arduino-ESP32 core 3.x, which PlatformIO's own `espressif32` platform doesn't ship; [pioarduino](https://github.com/pioarduino/platform-espressif32) does. This is the release the library is built and tested with:
 
 ```ini
 [env:esp32dev]
@@ -66,12 +66,14 @@ platform = https://github.com/pioarduino/platform-espressif32/releases/download/
 framework = arduino
 board = esp32dev
 monitor_speed = 115200
-lib_deps = https://github.com/richarddeweerd/esp-manager.git#v0.1.0
+lib_deps = richarddeweerd/EspManager@^0.1.0
 ```
+
+Keep the `richarddeweerd/` part: the Registry also has two older ESP8266 libraries called ESPManager and espManager, which are something else.
 
 With the Arduino IDE: install the "esp32" boards package by Espressif, version 3.x, from the Boards Manager. Then download the repository as a ZIP from GitHub and add it with *Sketch → Include Library → Add .ZIP Library…*. The library is built and tested with PlatformIO only, so the Arduino IDE is untested.
 
-The library isn't in the PlatformIO Registry or the Arduino Library Manager yet.
+The library isn't in the Arduino Library Manager yet.
 
 ### 2. Build and flash
 
