@@ -126,6 +126,11 @@ public:
         return status_ == StationStatus::Connected ? gateway : Ipv4Address();
     }
 
+    Ipv4Address dnsIp() const override
+    {
+        return status_ == StationStatus::Connected ? dns : Ipv4Address();
+    }
+
     int8_t rssi() const override
     {
         return status_ == StationStatus::Connected ? connectedRssi : 0;
@@ -171,6 +176,7 @@ public:
     Ipv4Address ip{192, 168, 1, 50};
     Ipv4Address apIp{192, 168, 4, 1};
     Ipv4Address gateway{192, 168, 1, 1};
+    Ipv4Address dns{192, 168, 1, 53};
     int8_t connectedRssi = -55;
     MacAddress mac{0x24, 0x6f, 0x28, 0xab, 0xcd, 0xef};
 

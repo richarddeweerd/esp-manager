@@ -37,6 +37,7 @@ public:
 
     Ipv4Address localIp() const override;
     Ipv4Address gatewayIp() const override;
+    Ipv4Address dnsIp() const override;
     int8_t rssi() const override;
     MacAddress macAddress() const override;
 

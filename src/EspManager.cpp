@@ -91,6 +91,7 @@ DeviceStatus EspManager::status() const
     {
         status.ip = wifi.localIp();
         status.gateway = wifi.gatewayIp();
+        status.dns = wifi.dnsIp();
         status.rssi = wifi.rssi();
         status.channel = wifi.channel();
     }
@@ -101,6 +102,7 @@ DeviceStatus EspManager::status() const
                   mac[3], mac[4], mac[5]);
     status.mac = text;
     status.uptimeMs = platform_.clock.nowMs();
+    status.resetReason = platform_.system.resetReason();
     status.freeHeap = platform_.system.freeHeap();
     status.chip = platform_.system.chipModel();
     status.firmwareVersion = firmwareVersion_;
