@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EspManagerVersion.h"
+#include "core/ConnectionHistory.h"
 #include "core/DeviceName.h"
 #include "core/DeviceStatus.h"
 #include "core/Events.h"
@@ -137,6 +138,11 @@ public:
     bool scanComplete() const;
     std::vector<ScanResult> scanResults() const;
 
+    // The Connection History (F10.3): the most recent connection events, oldest first, from
+    // `esp.connectionHistory().entries()`. 20 are kept by default; change it before begin() with
+    // `esp.connectionHistory().setCapacity(n)`, 0 to 50. Kept in RAM, so a restart clears it.
+    ConnectionHistory& connectionHistory();
+
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();
@@ -186,6 +192,7 @@ private:
     Platform& platform_;
     Logger log_{platform_.log, platform_.clock};
     Events events_{log_};
+    ConnectionHistory history_{platform_.clock, log_};
     Settings settings_{platform_.storage, events_, log_};
     SavedNetworkStore store_{platform_.storage, log_};
     SavedNetworks networks_{store_, log_};

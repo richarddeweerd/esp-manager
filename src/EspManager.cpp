@@ -14,6 +14,13 @@ EspManager::EspManager(Platform& platform) : EspManager(nullptr, platform)
 EspManager::EspManager(std::shared_ptr<Esp32Platform> owned, Platform& platform)
     : ownedPlatform_(std::move(owned)), platform_(platform)
 {
+    // Added before any of the Developer's listeners, so theirs already see the entry.
+    events_.connected.add(
+        [this](const ConnectedInfo& info)
+        { history_.recordConnected(info.ssid, platform_.wifi.rssi(), info.channel); });
+    events_.connectFailed.add([this](const std::string& ssid, FailureReason reason)
+                              { history_.recordConnectFailed(ssid, reason); });
+    events_.disconnected.add([this](FailureReason reason) { history_.recordDisconnected(reason); });
 }
 
 void EspManager::begin()
@@ -25,6 +32,7 @@ void EspManager::begin()
     platform_.wifi.setHostname(hostname());
     log_.info("core", "hostname %s", hostname().c_str());
     begun_ = true;
+    history_.begin();
     connection_.begin();
     portal_.begin();
     management_.begin();
@@ -244,6 +252,11 @@ bool EspManager::scanComplete() const
 std::vector<ScanResult> EspManager::scanResults() const
 {
     return NetworkScanner::networkList(scanner_.results(), portal_.minSignal());
+}
+
+ConnectionHistory& EspManager::connectionHistory()
+{
+    return history_;
 }
 
 SavedNetworks& EspManager::networks()
