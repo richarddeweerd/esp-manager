@@ -73,6 +73,7 @@ const char* name(ConnectionState state)
 
 void setUp()
 {
+    hostlink::printWifiEvents();
 }
 
 void tearDown()
@@ -351,6 +352,7 @@ void setup()
 {
     Serial.begin(115200);
     hostlink::askForNetwork(10000);
+    hostlink::startWifiEventLog();
 
     clearManagementPassword();
     esp.management().enable();
@@ -379,6 +381,7 @@ void setup()
     RUN_TEST(test_management_interface_logs_the_host_in);
     RUN_TEST(test_moves_between_two_saved_networks);
     RUN_TEST(test_network_reset_leaves_and_opens_the_portal);
+    hostlink::printWifiEvents();
     UNITY_END();
     clearManagementPassword();
 

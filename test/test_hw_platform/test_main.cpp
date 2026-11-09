@@ -67,6 +67,7 @@ bool waitForScan(uint32_t timeoutMs)
 
 void setUp()
 {
+    hostlink::printWifiEvents();
 }
 
 void tearDown()
@@ -114,7 +115,10 @@ void test_scan_completes_and_finds_the_test_network()
                                     [](const ScanResult& r) { return r.ssid == testSsid; });
     TEST_ASSERT_TRUE_MESSAGE(found != results.end(), "test network not in the scan results");
     TEST_ASSERT_TRUE(found->secured);
-    TEST_ASSERT_LESS_THAN_INT8(0, found->rssi);
+    // A board right next to the access point reads about 0 dBm (sometimes above): its receiver is
+    // overloaded, and its connects then fail at random.
+    TEST_ASSERT_LESS_THAN_INT8_MESSAGE(
+        -5, found->rssi, "signal at about 0 dBm: the board is too close to the access point");
     testChannel = found->channel;
 }
 
@@ -141,7 +145,9 @@ void test_connect_joins_the_test_network()
     hw.wifi.setHostname("espmgr-hwtest");
     hw.wifi.useDhcp();
     hw.wifi.connect(testSsid, testPassword);
-    TEST_ASSERT_EQUAL(StationStatus::Connected, waitWhileConnecting(30000));
+    const StationStatus result = waitWhileConnecting(30000);
+    const std::string failure = std::string("failure: ") + toString(hw.wifi.lastFailure());
+    TEST_ASSERT_EQUAL_MESSAGE(StationStatus::Connected, result, failure.c_str());
     TEST_ASSERT_EQUAL(FailureReason::None, hw.wifi.lastFailure());
     TEST_ASSERT_FALSE(hw.wifi.localIp().isUnset());
     TEST_ASSERT_LESS_THAN_INT8(0, hw.wifi.rssi());
@@ -322,6 +328,7 @@ void setup()
 {
     Serial.begin(115200);
     hostlink::askForNetwork(10000);
+    hostlink::startWifiEventLog();
 
     UNITY_BEGIN();
     RUN_TEST(test_clock_advances_in_milliseconds);
@@ -340,6 +347,7 @@ void setup()
     RUN_TEST(test_storage_reads_nothing_from_a_missing_namespace);
     RUN_TEST(test_saved_networks_survive_nvs);
     RUN_TEST(test_storage_erase_all_empties_every_namespace);
+    hostlink::printWifiEvents();
     UNITY_END();
 
     hw.wifi.disconnect();
