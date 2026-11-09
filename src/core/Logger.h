@@ -5,6 +5,8 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <utility>
 
 // Lets the compiler check log format strings against their arguments. Member functions count
 // `this` as the first argument.
@@ -39,6 +41,24 @@ public:
     virtual void write(LogLevel level, const char* line) = 0;
 };
 
+// One line as the Developer's log handler receives it (US10.1.2). The strings are only valid
+// during the call.
+struct LogEntry
+{
+    LogLevel level;
+    // Milliseconds since start-up, as in the line's prefix.
+    uint64_t uptimeMs;
+    // The part of the library that wrote it, such as "wifi".
+    const char* tag;
+    // The text without the prefix.
+    const char* message;
+    // The finished line, "[espmgr 12.345 W wifi] lost connection", cut off at
+    // Logger::kMaxLineLength.
+    const char* line;
+};
+
+using LogHandler = std::function<void(const LogEntry&)>;
+
 // The library's internal logger (US10.1.1). Silent until a level is set. Lines look like
 // "[espmgr 12.345 W wifi] lost connection", with the time in seconds since start-up.
 //
@@ -52,6 +72,13 @@ public:
 
     Logger(LogSink& sink, const Clock& clock) : sink_(sink), clock_(clock)
     {
+    }
+
+    // Sends every line to `handler` in place of the sink; an empty handler goes back to the sink.
+    // It's called at once, from whichever call logged. Lines logged while it runs are dropped.
+    void setHandler(LogHandler handler)
+    {
+        handler_ = std::move(handler);
     }
 
     void setLevel(LogLevel level)
@@ -82,6 +109,8 @@ private:
     LogSink& sink_;
     const Clock& clock_;
     LogLevel level_ = LogLevel::Off;
+    LogHandler handler_;
+    bool inHandler_ = false;
 };
 
 }  // namespace espmgr

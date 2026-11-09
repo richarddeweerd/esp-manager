@@ -51,9 +51,17 @@ public:
     // Saved Network. Listeners are called as usual while it waits (US01.1.2).
     bool waitForConnection(uint32_t timeoutMs);
 
-    // How much the library prints to Serial; off by default. For example
-    // `esp.setLogLevel(espmgr::LogLevel::Debug);`. Call Serial.begin() first.
+    // How much the library logs; off by default. For example
+    // `esp.setLogLevel(espmgr::LogLevel::Debug);`. Lines go to Serial (call Serial.begin()
+    // first) or to the handler set with setLogHandler().
     void setLogLevel(LogLevel level);
+
+    // Sends every log line to `handler` instead of Serial; nullptr goes back to Serial
+    // (US10.1.2). It doesn't change the level: nothing is logged until setLogLevel(). The handler
+    // is called at once from whichever call logged, gets an espmgr::LogEntry whose strings are
+    // valid only during the call, and must not call back into EspManager. Passwords are never
+    // logged, so they never reach it.
+    void setLogHandler(LogHandler handler);
 
     // Everything the status pages show: connection, SSID, IP address, signal, hostname, MAC,
     // uptime, free heap, chip and versions (US11.2.4). Never a password.

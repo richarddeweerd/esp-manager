@@ -75,6 +75,11 @@ void EspManager::setLogLevel(LogLevel level)
     log_.setLevel(level);
 }
 
+void EspManager::setLogHandler(LogHandler handler)
+{
+    log_.setHandler(std::move(handler));
+}
+
 DeviceStatus EspManager::status() const
 {
     WifiDriver& wifi = platform_.wifi;
