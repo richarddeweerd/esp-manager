@@ -207,6 +207,7 @@ private:
                                     platform_.storage,
                                     platform_.clock,
                                     connection_,
+                                    history_,
                                     log_,
                                     [this] { return hostname(); },
                                     [this] { return status(); },

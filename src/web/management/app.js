@@ -6,6 +6,8 @@ const app = document.getElementById("app");
 const S = {
   tab: "wifi",
   status: null,
+  // GET /api/history, loaded with the status while the Status tab is open.
+  history: null,
   // The Saved Networks in the order they're tried, how many fit, and the one in use.
   networks: null,
   max: 0,
@@ -49,6 +51,7 @@ async function loadStatus() {
     const first = !S.status;
     try {
       S.status = await getJson("/api/status");
+      if (S.tab === "status") S.history = await getJson("/api/history");
       S.error = false;
     } catch (error) {
       S.error = true;
@@ -57,6 +60,15 @@ async function loadStatus() {
     if (first || !typing()) render();
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
+}
+
+async function loadHistory() {
+  try {
+    S.history = await getJson("/api/history");
+  } catch (error) {
+    S.error = true;
+  }
+  if (S.tab === "status") render();
 }
 
 async function runAction(key) {
@@ -181,6 +193,39 @@ function tile(label, value, html) {
     <div class="v">${html ? value : esc(value)}</div></div>`;
 }
 
+// --- The Connection History, newest first ---
+
+function formatAgo(ms) {
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return STRINGS.justNow;
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const parts = days ? [`${days} ${STRINGS.days}`, `${hours} ${STRINGS.hours}`]
+    : hours ? [`${hours} ${STRINGS.hours}`, `${minutes % 60} ${STRINGS.minutes}`]
+      : [`${minutes} ${STRINGS.minutes}`];
+  return STRINGS.ago.replace("{time}", parts.join(" "));
+}
+
+function eventText(event) {
+  const texts = STRINGS.historyEvents;
+  const reason = STRINGS.failureReasons[event.reason] || event.reason;
+  const text = event.kind === "disconnected" && event.reason === "none" ? texts.left
+    : texts[event.kind] || event.kind;
+  return text.replace("{ssid}", event.ssid || "").replace("{reason}", reason || "");
+}
+
+function historyRows() {
+  const h = S.history;
+  if (!h) return `<div class="row muted">${esc(STRINGS.loading)}</div>`;
+  if (!h.events.length) return `<div class="row muted">${esc(STRINGS.noEvents)}</div>`;
+  return h.events.slice().reverse().map((event) => {
+    const bad = event.kind === "connect-failed" || (event.kind === "disconnected" && event.reason !== "none");
+    const signal = event.kind === "connected" ? `&nbsp;${bars(event.rssi)}` : "";
+    return `<div class="row${bad ? " bad" : ""}"><span class="name">${esc(eventText(event))}${signal}</span>
+      <span class="muted">${esc(formatAgo(h.uptimeMs - event.uptimeMs))}</span></div>`;
+  }).join("");
+}
+
 const tabs = {
   wifi(s) {
     const connected = s.connection === "Connected";
@@ -217,6 +262,7 @@ const tabs = {
       ${tile(STRINGS.signal, connected ? `${bars(s.rssi)} ${s.rssi}` : "–", true)}
       ${tile(STRINGS.ipAddress, connected ? s.ip : "–")}
       ${tile(STRINGS.uptime, formatUptime(s.uptimeMs))}</div>
+      <h3>${esc(STRINGS.recentEvents)}</h3><div class="rows">${historyRows()}</div>
       <h3>${esc(STRINGS.details)}</h3><div class="rows">${statusList(s)}</div>`;
   },
 
@@ -390,6 +436,7 @@ app.addEventListener("click", (event) => {
   if (tab.dataset.tab === S.tab && S.tab === "settings") return;
   S.tab = tab.dataset.tab;
   if (S.tab === "wifi") loadNetworks();
+  if (S.tab === "status") loadHistory();
   if (S.tab === "settings") {
     // Fresh values, and anything not saved earlier is dropped.
     S.settingsLoaded = false;
