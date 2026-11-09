@@ -46,6 +46,8 @@ The test that moves between two Saved Networks also needs `ESPMGR_TEST_SSID_B`, 
 
 `test_hw_settings` restarts the board halfway, to check that Settings survive on real NVS. Its tests before the restart print their results, and the summary at the end counts only the ones after it; a failure before the restart ends the run there. It also prints what 32 Settings cost in heap and how long reading them takes, which is where the figure in the README comes from.
 
+The tests also print every Wi-Fi disconnect with the Wi-Fi stack's reason code and the signal, at the start of each test. `test_hw_espmanager` checks the Connection History after moving between the two networks; it prints the history as `history …` lines.
+
 ## Code
 
 - C++17, formatted with the repository's `.clang-format` (`scripts/check-format.sh` checks it).

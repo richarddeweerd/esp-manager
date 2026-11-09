@@ -344,6 +344,52 @@ void test_moves_between_two_saved_networks()
                                         espmgr::WifiConnection::kDefaultMaxRetryDelayMs));
 }
 
+// The Connection History after the real connects and the switch above (F10.3).
+void test_connection_history_records_the_moves()
+{
+    HOSTLINK_REQUIRE_SECOND_NETWORK();
+    using Kind = espmgr::ConnectionEvent::Kind;
+    const std::vector<espmgr::ConnectionEvent> entries = esp.connectionHistory().entries();
+    for (const auto& e : entries)
+    {
+        Serial.printf("history %lu ms %s %s %s %d\n", static_cast<unsigned long>(e.uptimeMs),
+                      espmgr::toString(e.kind), e.ssid.c_str(), espmgr::failureCode(e.reason),
+                      e.rssi);
+    }
+    TEST_ASSERT_FALSE(entries.empty());
+    TEST_ASSERT_EQUAL(Kind::Started, entries.front().kind);
+
+    // Joined the first network, lost it when the access point switched to b, joined b, and is
+    // back on the first network.
+    size_t lostFirst = entries.size();
+    size_t joinedB = entries.size();
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const auto& e = entries[i];
+        if (e.kind == Kind::Disconnected && e.ssid == hostlink::testSsid &&
+            e.reason != espmgr::FailureReason::None && lostFirst == entries.size())
+        {
+            lostFirst = i;
+        }
+        if (e.kind == Kind::Connected && e.ssid == hostlink::testSsidB && joinedB == entries.size())
+        {
+            joinedB = i;
+            TEST_ASSERT_LESS_THAN_INT8(0, e.rssi);
+            TEST_ASSERT_NOT_EQUAL(0, e.channel);
+        }
+        if (i > 0)
+        {
+            TEST_ASSERT_TRUE(entries[i - 1].uptimeMs <= e.uptimeMs);
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(lostFirst < entries.size(), "no lost connection to the first network");
+    TEST_ASSERT_TRUE_MESSAGE(joinedB < entries.size(), "no connect to the second network");
+    TEST_ASSERT_TRUE(lostFirst < joinedB);
+    TEST_ASSERT_EQUAL(Kind::Connected, entries.back().kind);
+    TEST_ASSERT_EQUAL_STRING(hostlink::testSsid.c_str(), entries.back().ssid.c_str());
+    TEST_ASSERT_TRUE(entries.back().uptimeMs <= millis());
+}
+
 void test_network_reset_leaves_and_opens_the_portal()
 {
     HOSTLINK_REQUIRE_NETWORK();
@@ -365,6 +411,8 @@ void setup()
 
     clearManagementPassword();
     esp.management().enable();
+    // Room for every event of this run, so Started is still first at the end.
+    esp.connectionHistory().setCapacity(espmgr::ConnectionHistory::kMaxCapacity);
     esp.setLogLevel(LogLevel::Info);
     esp.onConnectionStateChanged([](ConnectionState from, ConnectionState to)
                                  { events.push_back(std::string(name(from)) + ">" + name(to)); });
@@ -389,6 +437,7 @@ void setup()
     RUN_TEST(test_portal_password_makes_the_access_point_wpa2);
     RUN_TEST(test_management_interface_logs_the_host_in);
     RUN_TEST(test_moves_between_two_saved_networks);
+    RUN_TEST(test_connection_history_records_the_moves);
     RUN_TEST(test_network_reset_leaves_and_opens_the_portal);
     hostlink::printWifiEvents();
     UNITY_END();

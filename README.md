@@ -22,7 +22,7 @@ void loop()
 
 That's the whole [Basic example](examples/Basic). On a new board it opens a Wi-Fi access point with a setup page; once the Owner has picked a network there, the device joins it, and after every restart it reconnects by itself.
 
-Version `0.1.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
+Version `0.2.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
 
 - [What it does](#what-it-does)
 - [Terms](#terms)
@@ -41,9 +41,10 @@ Version `0.1.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHA
 - Your own settings on the web pages: text, passwords, numbers, checkboxes and selections, checked and stored in NVS for you.
 - An optional, password-protected management page on the Owner's own network: the Saved Networks, the device's status, chosen settings, a restart and the resets.
 - Events for connection and setup changes, always called from inside `process()`.
+- Diagnostics: the library's log lines in your own handler, a Connection History of recent connects, failures and drops, and why the device last started.
 - Everything happens in `process()`; nothing waits unless you ask for it.
 
-Planned for later versions: diagnostics, theming of the pages, over-the-air updates and NTP time.
+Planned for later versions: theming of the pages, over-the-air updates and NTP time.
 
 ## Terms
 
@@ -55,6 +56,7 @@ The README uses a few words in a fixed sense:
 - **Provisioning Portal**: the setup site. The device opens its own access point and serves a setup page on it, so the Owner can choose a Saved Network. It only answers on that access point.
 - **Management Interface**: the management site, off unless you turn it on. A password-protected page on the device's address in the Owner's own network, once the device is connected.
 - **Setting**: a named value your firmware declares and the Owner fills in on the web pages, such as a server's name. Settings are grouped in **Sections**.
+- **Connection History**: the device's record of its recent connection events, kept in memory until it restarts.
 
 ## Quick start
 
@@ -68,7 +70,7 @@ platform = https://github.com/pioarduino/platform-espressif32/releases/download/
 framework = arduino
 board = esp32dev
 monitor_speed = 115200
-lib_deps = richarddeweerd/EspManager@^0.1.0
+lib_deps = richarddeweerd/EspManager@^0.2.0
 ```
 
 Keep the `richarddeweerd/` part: the Registry also has two older ESP8266 libraries called ESPManager and espManager, which are something else.
@@ -219,7 +221,7 @@ esp.portal().setMinSignal(-80);                       // leave out networks weak
 The Management Interface is a page on the device's own address in the Owner's network, such as `http://192.168.1.50/`, with these tabs:
 
 - **Wi-Fi**: the Saved Networks, with the one in use marked. The Owner can move or remove a network, and add one. An added network is saved without a test, since testing would drop the Owner's own connection; the Provisioning Portal is the place to test one. The last Saved Network can't be removed here; the Network Reset is for that.
-- **Status**: the connection, addresses, signal, hostname, MAC, uptime, free memory, chip and versions.
+- **Status**: the connection, addresses, signal, hostname, MAC, uptime, why the device last started, free memory, chip and versions, plus *Recent events* from the [Connection History](#connection-history).
 - **Settings**: only when you mark a Setting for it; see [Settings](#settings).
 - **Device**: restart, Settings Reset, Network Reset and Factory Reset, each after a confirmation.
 
@@ -357,7 +359,9 @@ The Network Reset keeps the management password and the Settings; the Settings R
 
 ### Status
 
-`esp.status()` returns an `espmgr::DeviceStatus` with everything the status pages show: connection state, SSID, IP address, gateway, signal and channel (while connected), hostname, MAC address, uptime, free heap, chip, your firmware version and the library's version. It never holds a password. Set your firmware's version for it with:
+`esp.status()` returns an `espmgr::DeviceStatus` with everything the status pages show: connection state, SSID, IP address, gateway, DNS server, signal and channel (while connected), hostname, MAC address, uptime, why the device last started, free heap, chip, your firmware version and the library's version. It never holds a password.
+
+`status.resetReason` is `PowerOn`, `External` (the reset button, or a programmer over USB), `Software` (for example `esp.restart()`), `Crash`, `Watchdog`, `Brownout` (the supply voltage dropped too low), `DeepSleep` or `Other`; `espmgr::toString()` gives a short code such as `"brownout"`. A device that keeps restarting with `Brownout` usually needs a better power supply. Set your firmware's version for it with:
 
 ```cpp
 esp.setFirmwareVersion("1.4.2");
@@ -395,10 +399,38 @@ esp.setLogLevel(espmgr::LogLevel::Debug);
 
 Lines look like `[espmgr 12.345 I wifi] connected to Home as 192.168.1.50, channel 6`. Passwords are never logged, at any level.
 
+To send the lines somewhere else, such as syslog or MQTT, or print them your own way, set a handler. It replaces `Serial`; `nullptr` goes back to it:
+
+```cpp
+esp.setLogHandler([](const espmgr::LogEntry& entry) {
+    Serial.printf("%s: %s\n", entry.tag, entry.message);
+});
+esp.setLogLevel(espmgr::LogLevel::Info);
+```
+
+An `espmgr::LogEntry` has the `level`, `uptimeMs`, `tag`, `message` and the finished `line`, cut off at 160 characters. Its strings are only valid during the call, so copy what you keep. A handler doesn't turn logging on; the level still decides what's logged. It's called at once from inside the library, from whichever call logged, so keep it short and don't call back into `EspManager` from it.
+
+Only EspManager's own lines go to the handler. The Arduino core and ESP-IDF log through their own system, set with the core's debug level (`-D CORE_DEBUG_LEVEL=…`).
+
+### Connection History
+
+The device keeps its most recent connection events in memory: when it started, each connect (SSID, signal, channel), each failed attempt (SSID and reason) and each lost connection (reason), with the time since start-up:
+
+```cpp
+for (const espmgr::ConnectionEvent& event : esp.connectionHistory().entries())  // oldest first
+{
+    Serial.printf("%llu ms %s %s %s\n", static_cast<unsigned long long>(event.uptimeMs),
+                  espmgr::toString(event.kind), event.ssid.c_str(), espmgr::toString(event.reason));
+}
+```
+
+It keeps the last 20 events; `esp.connectionHistory().setCapacity(n)` before `begin()` changes that, from 0 (keep none) to 50, at about 50 bytes each. A network the Owner tests in the Provisioning Portal isn't recorded unless the device joins it. A restart clears the history, while the Network Reset and Settings Reset leave it; the [status](#status) says why the device last started. The Management Interface shows it on its Status tab as *Recent events*. The Provisioning Portal doesn't, since anyone in range can open it.
+
 ## Examples
 
 - [Basic](examples/Basic): the smallest sketch, `begin()` and `process()`, with an optional wait for the connection.
 - [Settings](examples/Settings): your own settings in two Sections, with validation, a password, some marked for the Management Interface, and `onSettingChanged`.
+- [Diagnostics](examples/Diagnostics): a log handler printing the library's lines in its own format, and every minute the status, with why the device last started, and the Connection History.
 - [Button](examples/Button): the board's BOOT button opens the Provisioning Portal on a short press, starts a Network Reset when held for 5 seconds and a Factory Reset when held for 10, acting when it's let go. It's polled from `loop()` without `delay()`, and the serial monitor says what letting go will do. Build with `-D BUTTON_PIN=<n>` for another pin.
 
 ## Supported hardware
@@ -415,7 +447,8 @@ Lines look like `[espmgr 12.345 I wifi] connected to Home as 192.168.1.50, chann
 - Password-type Settings are stored in NVS as plain text too, under the same condition. They never go to a page or the logs, but the sketch can read them.
 - Anyone in range of an open Provisioning Portal can read and change your Settings, and can replace or remove a password-type one, though not read it. If your Settings matter, give the portal a password. In the Management Interface, marked Settings are behind its login, and travel over plain HTTP like everything else on it.
 - Moving and removing Saved Networks, saving Settings, and on the Management Interface adding a network, restarting and the resets, need a header that only the device's own pages send, so another web site can't make the Owner's browser do them.
-- Passwords, password-type Settings included, never appear in the logs, the status or any page the device serves.
+- Passwords, password-type Settings included, never appear in the logs, the status or any page the device serves. They never reach a log handler either.
+- The Connection History holds the names of the networks the device joined or tried. The Management Interface shows it behind its login; the Provisioning Portal doesn't serve it.
 
 ## Development
 
