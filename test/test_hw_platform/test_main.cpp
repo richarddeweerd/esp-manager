@@ -115,7 +115,10 @@ void test_scan_completes_and_finds_the_test_network()
                                     [](const ScanResult& r) { return r.ssid == testSsid; });
     TEST_ASSERT_TRUE_MESSAGE(found != results.end(), "test network not in the scan results");
     TEST_ASSERT_TRUE(found->secured);
-    TEST_ASSERT_LESS_THAN_INT8(0, found->rssi);
+    // A board right next to the access point reads about 0 dBm (sometimes above): its receiver is
+    // overloaded, and its connects then fail at random.
+    TEST_ASSERT_LESS_THAN_INT8_MESSAGE(
+        -5, found->rssi, "signal at about 0 dBm: the board is too close to the access point");
     testChannel = found->channel;
 }
 
