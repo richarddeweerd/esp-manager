@@ -177,6 +177,61 @@ void test_right_password_gets_the_status()
     TEST_ASSERT_TRUE(response.body.find("\"ssid\":\"Home\"") != std::string::npos);
 }
 
+// --- Connection History (US10.3.1) ---
+
+void test_history_needs_the_password()
+{
+    FakePlatform fakes;
+    Device d(fakes);
+    d.esp.management().setPassword(kPassword);
+    d.connect();
+    TEST_ASSERT_EQUAL_INT(401, d.get("/api/history").status);
+}
+
+void test_right_password_gets_the_history()
+{
+    FakePlatform fakes;
+    Device d(fakes);
+    d.esp.management().setPassword(kPassword);
+    d.connect();
+    fakes.clock.advance(4000);
+    const FakeHttpServer::Response response = d.login("/api/history");
+    TEST_ASSERT_EQUAL_INT(200, response.status);
+    TEST_ASSERT_EQUAL_STRING("application/json", response.contentType.c_str());
+    TEST_ASSERT_EQUAL_STRING(
+        R"({"uptimeMs":4000,"capacity":20,"events":[)"
+        R"({"kind":"started","uptimeMs":0},)"
+        R"({"kind":"connected","uptimeMs":0,"ssid":"Home","rssi":-55,"channel":6}]})",
+        response.body.c_str());
+}
+
+void test_the_portal_doesnt_serve_the_history()
+{
+    FakePlatform fakes;
+    Device d(fakes);
+    d.esp.management().setPassword(kPassword);
+    d.esp.begin();
+    d.esp.process();
+    TEST_ASSERT_EQUAL(espmgr::PortalState::Active, d.esp.portalState());
+    fakes.http.localIp = fakes.wifi.apIp;
+    // As any path the portal doesn't know: sent to its setup page while the captive portal runs.
+    const FakeHttpServer::Response response = fakes.http.request(HttpMethod::Get, "/api/history");
+    TEST_ASSERT_EQUAL_INT(302, response.status);
+    TEST_ASSERT_EQUAL_STRING("http://192.168.4.1/", response.location.c_str());
+}
+
+void test_the_portal_without_captive_dns_answers_404_for_the_history()
+{
+    FakePlatform fakes;
+    Device d(fakes);
+    d.esp.management().setPassword(kPassword);
+    d.esp.portal().setCaptivePortal(false);
+    d.esp.begin();
+    d.esp.process();
+    fakes.http.localIp = fakes.wifi.apIp;
+    TEST_ASSERT_EQUAL_INT(404, fakes.http.request(HttpMethod::Get, "/api/history").status);
+}
+
 void test_wrong_password_is_refused_and_logged()
 {
     FakePlatform fakes;
@@ -462,6 +517,10 @@ int main()
     RUN_TEST(test_asks_for_the_password_with_a_digest_challenge);
     RUN_TEST(test_right_password_gets_the_page_gzipped);
     RUN_TEST(test_right_password_gets_the_status);
+    RUN_TEST(test_history_needs_the_password);
+    RUN_TEST(test_right_password_gets_the_history);
+    RUN_TEST(test_the_portal_doesnt_serve_the_history);
+    RUN_TEST(test_the_portal_without_captive_dns_answers_404_for_the_history);
     RUN_TEST(test_wrong_password_is_refused_and_logged);
     RUN_TEST(test_a_request_without_credentials_is_not_logged_as_refused);
     RUN_TEST(test_saved_networks_are_listed_without_passwords);

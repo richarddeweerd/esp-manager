@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Clock.h"
+#include "core/JsonWriter.h"
 #include "core/Logger.h"
 #include "core/WifiDriver.h"
 
@@ -38,6 +39,10 @@ struct ConnectionEvent
 
 // "started", "connected", "connect-failed" or "disconnected".
 const char* toString(ConnectionEvent::Kind kind);
+
+// A short code for a failure in JSON: "none", "network-not-found", "wrong-password", "timeout",
+// "connection-lost" or "other".
+const char* failureCode(FailureReason reason);
 
 // The most recent connection events, oldest dropped first, kept in RAM: a restart clears them,
 // Network Reset and Settings Reset don't. EspManager records the events it raises, so this holds
@@ -89,5 +94,10 @@ private:
     size_t next_ = 0;
     std::string connectedSsid_;
 };
+
+// Writes the history for GET /api/history: {"uptimeMs":…,"capacity":…,"events":[…]}, oldest
+// first, each event with its kind, uptimeMs and the fields that apply to it. `nowMs` lets the page
+// say how long ago each one was.
+void writeJson(JsonWriter& json, const ConnectionHistory& history, uint64_t nowMs);
 
 }  // namespace espmgr

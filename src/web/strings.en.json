@@ -81,6 +81,26 @@
   "mac": "MAC address",
   "uptime": "Running for",
   "days": "d",
+  "hours": "h",
+  "minutes": "min",
+  "ago": "{time} ago",
+  "justNow": "just now",
+  "recentEvents": "Recent events",
+  "noEvents": "Nothing yet.",
+  "historyEvents": {
+    "started": "Device started",
+    "connected": "Connected to {ssid}",
+    "connect-failed": "Couldn't connect to {ssid}: {reason}",
+    "disconnected": "Lost {ssid}: {reason}",
+    "left": "Left {ssid}"
+  },
+  "failureReasons": {
+    "network-not-found": "network not found",
+    "wrong-password": "wrong password",
+    "timeout": "no answer in time",
+    "connection-lost": "connection lost",
+    "other": "other reason"
+  },
   "lastStart": "Last start",
   "resetReasons": {
     "power-on": "Power switched on",

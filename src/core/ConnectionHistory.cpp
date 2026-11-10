@@ -21,6 +21,59 @@ const char* toString(ConnectionEvent::Kind kind)
     return "?";
 }
 
+const char* failureCode(FailureReason reason)
+{
+    switch (reason)
+    {
+    case FailureReason::None:
+        return "none";
+    case FailureReason::NetworkNotFound:
+        return "network-not-found";
+    case FailureReason::WrongPassword:
+        return "wrong-password";
+    case FailureReason::Timeout:
+        return "timeout";
+    case FailureReason::ConnectionLost:
+        return "connection-lost";
+    case FailureReason::Other:
+        break;
+    }
+    return "other";
+}
+
+void writeJson(JsonWriter& json, const ConnectionHistory& history, uint64_t nowMs)
+{
+    json.beginObject()
+        .key("uptimeMs")
+        .number(static_cast<int64_t>(nowMs))
+        .key("capacity")
+        .number(static_cast<int64_t>(history.capacity()))
+        .key("events")
+        .beginArray();
+    for (const ConnectionEvent& event : history.entries())
+    {
+        json.beginObject()
+            .key("kind")
+            .string(toString(event.kind))
+            .key("uptimeMs")
+            .number(static_cast<int64_t>(event.uptimeMs));
+        if (event.kind != ConnectionEvent::Kind::Started)
+        {
+            json.key("ssid").string(event.ssid);
+        }
+        if (event.kind == ConnectionEvent::Kind::Connected)
+        {
+            json.key("rssi").number(event.rssi).key("channel").number(event.channel);
+        }
+        else if (event.kind != ConnectionEvent::Kind::Started)
+        {
+            json.key("reason").string(failureCode(event.reason));
+        }
+        json.endObject();
+    }
+    json.endArray().endObject();
+}
+
 bool ConnectionHistory::setCapacity(size_t capacity)
 {
     if (begun_)

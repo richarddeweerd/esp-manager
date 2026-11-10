@@ -183,6 +183,17 @@ void ManagementInterface::registerRoutes()
                        routes_.http().send(200, "application/json", json.str());
                    }
                });
+    // The Connection History, only here: anyone in range can open the Provisioning Portal.
+    routes_.on(Site::Management, HttpMethod::Get, "/api/history",
+               [this](const HttpRequest& request)
+               {
+                   if (authorize(request))
+                   {
+                       JsonWriter json;
+                       writeJson(json, history_, clock_.nowMs());
+                       routes_.http().send(200, "application/json", json.str());
+                   }
+               });
     // Removing the last Saved Network here would be a Network Reset, which has its own button.
     networksApi_.registerRoutes(Site::Management,
                                 [this](const HttpRequest& request) { return authorize(request); },

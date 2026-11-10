@@ -244,6 +244,40 @@ void test_settings_reset_keeps_it()
     TEST_ASSERT_EQUAL(2, d.esp.connectionHistory().size());
 }
 
+void test_json_has_the_fields_for_each_kind()
+{
+    Device d;
+    d.esp.begin();
+    d.esp.process();
+    d.fakes.wifi.failConnect(FailureReason::WrongPassword);
+    d.esp.process();
+    d.waitForRetry();
+    d.fakes.wifi.completeConnect(3);
+    d.esp.process();
+    d.fakes.wifi.loseConnection();
+    d.esp.process();
+    espmgr::JsonWriter json;
+    espmgr::writeJson(json, d.esp.connectionHistory(), 700000);
+    const std::string expected =
+        R"({"uptimeMs":700000,"capacity":20,"events":[)"
+        R"({"kind":"started","uptimeMs":0},)"
+        R"({"kind":"connect-failed","uptimeMs":0,"ssid":"Home","reason":"wrong-password"},)"
+        R"({"kind":"connected","uptimeMs":600000,"ssid":"Home","rssi":-55,"channel":3},)"
+        R"({"kind":"disconnected","uptimeMs":600000,"ssid":"Home","reason":"connection-lost"}]})";
+    TEST_ASSERT_EQUAL_STRING(expected.c_str(), json.str().c_str());
+}
+
+void test_failures_have_short_codes()
+{
+    TEST_ASSERT_EQUAL_STRING("none", espmgr::failureCode(FailureReason::None));
+    TEST_ASSERT_EQUAL_STRING("network-not-found",
+                             espmgr::failureCode(FailureReason::NetworkNotFound));
+    TEST_ASSERT_EQUAL_STRING("wrong-password", espmgr::failureCode(FailureReason::WrongPassword));
+    TEST_ASSERT_EQUAL_STRING("timeout", espmgr::failureCode(FailureReason::Timeout));
+    TEST_ASSERT_EQUAL_STRING("connection-lost", espmgr::failureCode(FailureReason::ConnectionLost));
+    TEST_ASSERT_EQUAL_STRING("other", espmgr::failureCode(FailureReason::Other));
+}
+
 void test_kinds_have_short_codes()
 {
     TEST_ASSERT_EQUAL_STRING("started", espmgr::toString(Kind::Started));
@@ -269,6 +303,8 @@ int main()
     RUN_TEST(test_capacity_after_begin_is_refused);
     RUN_TEST(test_network_reset_keeps_it_and_records_leaving);
     RUN_TEST(test_settings_reset_keeps_it);
+    RUN_TEST(test_json_has_the_fields_for_each_kind);
+    RUN_TEST(test_failures_have_short_codes);
     RUN_TEST(test_kinds_have_short_codes);
     return UNITY_END();
 }

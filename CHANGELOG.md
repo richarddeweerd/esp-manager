@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Log handler: `esp.setLogHandler(fn)` sends the library's log lines to the sketch instead of `Serial`, as an `espmgr::LogEntry` with the level, time, tag, message and finished line; `nullptr` goes back to `Serial`. It doesn't change the level, which `esp.setLogLevel()` still sets (#33).
 - Device status: the DNS server and why the device last started (power-on, reset button or USB, software restart, crash, watchdog, brownout or deep sleep), in `esp.status()` (`dns`, `resetReason`) and on the status pages (#34).
 - Connection History: `esp.connectionHistory().entries()` lists the most recent connection events, oldest first: started, connected (SSID, signal, channel), connect failed (SSID, reason) and disconnected (reason), each with the time since start-up. 20 are kept by default, `setCapacity()` before `begin()` changes it (0 to 50). It's kept in RAM, so a restart clears it (#35).
+- The Management Interface's Status tab lists the Connection History as *Recent events*, newest first, from `GET /api/history`. The Provisioning Portal doesn't serve it (#36).
 
 ## [0.1.0] - 2026-11-01
 
