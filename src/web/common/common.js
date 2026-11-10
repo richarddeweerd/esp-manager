@@ -13,6 +13,49 @@ async function getJson(path) {
   return response.json();
 }
 
+// The Developer's Branding, from /api/ui. Until it arrives, the theme follows the phone.
+const UI = { title: "", logo: false, theme: "auto" };
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+// The page's colours hang off data-theme="light|dark" on <html>, which custom CSS can use too.
+function applyTheme() {
+  const dark = UI.theme === "dark" || (UI.theme === "auto" && darkQuery.matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+}
+applyTheme();
+darkQuery.addEventListener("change", applyTheme);
+
+// Fetches the Branding, then calls `done` to show the page again, also when it couldn't be read.
+async function loadUi(done) {
+  try {
+    Object.assign(UI, await getJson("/api/ui"));
+  } catch (error) {
+    // The page keeps its built-in look.
+  }
+  applyTheme();
+  if (UI.logo && !document.querySelector("link[rel=icon]")) {
+    const icon = document.createElement("link");
+    icon.rel = "icon";
+    icon.href = "/logo";
+    document.head.appendChild(icon);
+  }
+  done();
+}
+
+// The header's left side: the logo, and the Developer's title over `heading`, or just `heading`.
+function brandHtml(heading) {
+  const logo = UI.logo ? `<img class="logo" src="/logo" alt="">` : "";
+  const names = UI.title
+    ? `<h1>${esc(UI.title)}</h1><p class="sub">${esc(heading)}</p>`
+    : `<h1>${esc(heading)}</h1>`;
+  return `<div class="brand">${logo}<div class="names">${names}</div></div>`;
+}
+
+// The browser tab's title: the Developer's title first, then the other parts that aren't empty.
+function tabTitle(...parts) {
+  return [UI.title, ...parts].filter(Boolean).join(" · ");
+}
+
 // The header tells the device the request comes from its own page, not from another site.
 async function postForm(path, fields) {
   const response = await fetch(path, {
