@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-11-09
+## [0.2.0] - 2026-11-10
 
 Settings for the Owner to fill in, and diagnostics.
 
