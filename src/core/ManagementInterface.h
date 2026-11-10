@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Branding.h"
 #include "core/Clock.h"
 #include "core/ConnectionHistory.h"
 #include "core/DeviceStatus.h"
@@ -56,14 +57,14 @@ public:
 
     // `deviceName` gives the default realm, `status` what GET /api/status shows.
     ManagementInterface(WebRoutes& routes, SavedNetworksApi& networksApi, SettingsApi& settingsApi,
-                        Storage& storage, Clock& clock, WifiConnection& connection,
-                        const ConnectionHistory& history, Logger& log,
+                        Branding& branding, Storage& storage, Clock& clock,
+                        WifiConnection& connection, const ConnectionHistory& history, Logger& log,
                         std::function<std::string()> deviceName,
                         std::function<DeviceStatus()> status, Actions actions)
-        : routes_(routes), networksApi_(networksApi), settingsApi_(settingsApi), storage_(storage),
-          clock_(clock), connection_(connection), history_(history), log_(log),
-          deviceName_(std::move(deviceName)), status_(std::move(status)),
-          actions_(std::move(actions)), auth_(clock)
+        : routes_(routes), networksApi_(networksApi), settingsApi_(settingsApi),
+          branding_(branding), storage_(storage), clock_(clock), connection_(connection),
+          history_(history), log_(log), deviceName_(std::move(deviceName)),
+          status_(std::move(status)), actions_(std::move(actions)), auth_(clock)
     {
     }
 
@@ -130,6 +131,7 @@ private:
     WebRoutes& routes_;
     SavedNetworksApi& networksApi_;
     SettingsApi& settingsApi_;
+    Branding& branding_;
     Storage& storage_;
     Clock& clock_;
     WifiConnection& connection_;
