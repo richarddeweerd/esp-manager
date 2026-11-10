@@ -1,5 +1,6 @@
 #include "core/Logger.h"
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 
@@ -63,11 +64,23 @@ void Logger::write(LogLevel level, const char* tag, const char* format, va_list 
     {
         return;
     }
-    if (static_cast<size_t>(used) < sizeof(line))
+    const size_t prefix = std::min(static_cast<size_t>(used), sizeof(line) - 1);
+    if (prefix < sizeof(line) - 1)
     {
-        std::vsnprintf(line + used, sizeof(line) - used, format, args);
+        std::vsnprintf(line + prefix, sizeof(line) - prefix, format, args);
     }
-    sink_.write(level, line);
+    if (!handler_)
+    {
+        sink_.write(level, line);
+        return;
+    }
+    if (inHandler_)
+    {
+        return;
+    }
+    inHandler_ = true;
+    handler_(LogEntry{level, now, tag, line + prefix, line});
+    inHandler_ = false;
 }
 
 }  // namespace espmgr

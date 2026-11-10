@@ -38,11 +38,22 @@ struct Device
     FakePlatform fakes;
     EspManager esp{fakes.platform};
     std::vector<std::string> answers;
+    // What a Developer's log handler received, when the device has one (US10.1.2).
+    std::vector<std::string> handled;
     uint32_t logins = 0;
 
-    Device()
+    explicit Device(bool withLogHandler = false)
     {
         fakes.wifi.scanStartSucceeds = false;
+        if (withLogHandler)
+        {
+            esp.setLogHandler(
+                [this](const espmgr::LogEntry& entry)
+                {
+                    handled.push_back(std::string(entry.tag) + "|" + entry.message + "|" +
+                                      entry.line);
+                });
+        }
         esp.setLogLevel(LogLevel::Verbose);
         esp.management().enable();
         TEST_ASSERT_TRUE(esp.portal().setPassword(kPortalPassword));
@@ -145,6 +156,10 @@ struct Device
                 TEST_ASSERT_TRUE_MESSAGE(line.text.find(secret) == std::string::npos,
                                          line.text.c_str());
             }
+            for (const std::string& entry : handled)
+            {
+                TEST_ASSERT_TRUE_MESSAGE(entry.find(secret) == std::string::npos, entry.c_str());
+            }
             // Only the Digest hash of the management password is stored.
             for (const char* key : {"ha1", "id"})
             {
@@ -153,7 +168,7 @@ struct Device
             }
         }
         TEST_ASSERT_FALSE(answers.empty());
-        TEST_ASSERT_FALSE(fakes.log.lines.empty());
+        TEST_ASSERT_FALSE(fakes.log.lines.empty() && handled.empty());
     }
 };
 
@@ -177,6 +192,19 @@ void test_no_secret_leaves_the_device_during_a_successful_setup()
     d.esp.process();
     d.walkPortal();
     d.walkManagement();
+    d.assertNoSecretAnywhere();
+}
+
+void test_no_secret_reaches_the_log_handler()
+{
+    Device d(/*withLogHandler=*/true);
+    d.walkPortal();
+    d.submit(kWifiPassword);
+    d.fakes.wifi.completeConnect();
+    d.esp.process();
+    d.walkManagement();
+    TEST_ASSERT_TRUE(d.fakes.log.lines.empty());
+    TEST_ASSERT_FALSE(d.handled.empty());
     d.assertNoSecretAnywhere();
 }
 
@@ -294,6 +322,7 @@ int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_no_secret_leaves_the_device_during_a_successful_setup);
+    RUN_TEST(test_no_secret_reaches_the_log_handler);
     RUN_TEST(test_no_secret_leaves_the_device_after_a_failed_test);
     RUN_TEST(test_no_secret_leaves_the_device_with_save_anyway);
     RUN_TEST(test_refused_passwords_are_not_echoed);
