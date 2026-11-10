@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 - Branding (EP15): `esp.ui()` sets a title (`setTitle()`), a logo (`setLogo()`, SVG, PNG, JPEG or WebP), a theme (`setTheme()`, light, dark or following the phone) and a CSS string (`setCss()`) for both web pages, at any time. Both sites serve them at `GET /api/ui`, `GET /custom.css` and `GET /logo` (#38).
+- Both web pages show the Branding: the title as their heading, with the built-in one below it, the logo in the header and as the tab icon, the theme, and the Developer's CSS after their own. Their dark colours now hang off `data-theme="dark"` on `<html>`, which the Developer's CSS can use too (#39).
 
 ## [0.2.0] - 2026-11-10
 

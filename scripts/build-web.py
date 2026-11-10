@@ -42,7 +42,8 @@ SCRIPT = re.compile(r'<script src="([^"]+)"></script>')
 
 def build_page(folder):
     """Returns the page in src/web/<folder>/ as one HTML document. Every stylesheet and script
-    it links to (such as ../common/style.css) is inlined, in order."""
+    it links to (such as ../common/style.css) is inlined, in order. A link to an absolute path
+    (such as /custom.css) is left alone: the device serves it."""
     source = WEB / folder
     html = (source / "index.html").read_text(encoding="utf-8")
     strings = json.loads(STRINGS.read_text(encoding="utf-8"))
@@ -50,11 +51,15 @@ def build_page(folder):
     text = json.dumps(strings, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
     def css(match):
+        if match.group(1).startswith("/"):
+            return match.group(0)
         code = (source / match.group(1)).read_text(encoding="utf-8")
         # Comments are for the sources only.
         return "<style>\n" + re.sub(r"/\*.*?\*/\n?", "", code, flags=re.S) + "</style>"
 
     def script(match):
+        if match.group(1).startswith("/"):
+            return match.group(0)
         return "<script>\n" + (source / match.group(1)).read_text(encoding="utf-8") + "</script>"
 
     html = re.sub(r"<!--.*?-->\n?", "", html, flags=re.S)

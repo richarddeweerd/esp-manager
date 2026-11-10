@@ -1,6 +1,7 @@
-/* Shared by every page. The look is set only through these custom properties, so it can be
-   themed later (EP15). */
+/* Shared by every page. The look is set only through these custom properties, which the
+   Developer's CSS (/custom.css, loaded after this) may override. */
 :root {
+  color-scheme: light;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --radius: 10px;
   --radius-sm: 6px;
@@ -18,20 +19,21 @@
   --bad: #b91c1c;
   --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 2px 8px rgba(0, 0, 0, .05);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111317;
-    --surface: #1b1e24;
-    --surface-2: #252932;
-    --text: #e8eaee;
-    --muted: #9aa3b0;
-    --line: #2e333c;
-    --accent: #5b8def;
-    --ok: #4ade80;
-    --warn: #f59e0b;
-    --bad: #f87171;
-    --shadow: none;
-  }
+/* common.js sets data-theme on <html>: from the phone's setting, or as the Developer fixed it.
+   The selector weighs the same as :root, so the Developer's own rules, which come later, win. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111317;
+  --surface: #1b1e24;
+  --surface-2: #252932;
+  --text: #e8eaee;
+  --muted: #9aa3b0;
+  --line: #2e333c;
+  --accent: #5b8def;
+  --ok: #4ade80;
+  --warn: #f59e0b;
+  --bad: #f87171;
+  --shadow: none;
 }
 
 * { box-sizing: border-box; }
@@ -80,3 +82,9 @@ button, input { font: inherit; color: inherit; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: var(--space); box-shadow: var(--shadow); margin-bottom: 12px; }
 .check.setting { margin: 16px 0; font-size: 16px; color: inherit; }
+
+/* The header's Branding: the logo, and the Developer's title over the built-in heading. */
+.brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.brand .logo { height: 32px; width: auto; max-width: 96px; flex: none; }
+.brand .names { min-width: 0; }
+.brand .sub { margin: 0; font-size: 13px; color: var(--muted); }

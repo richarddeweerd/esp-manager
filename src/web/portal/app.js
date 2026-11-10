@@ -410,7 +410,8 @@ function render() {
   // The status is one tap away, except while a test runs.
   const link = S.screen === "status" || S.screen === "connecting" ? ""
     : `<button class="btn link" data-act="openStatus">${esc(STRINGS.status)}</button>`;
-  app.innerHTML = `<header><h1>${esc(STRINGS.title)}</h1>${link}</header>${steps}${body}`;
+  app.innerHTML = `<header>${brandHtml(STRINGS.title)}${link}</header>${steps}${body}`;
+  document.title = tabTitle(STRINGS.title);
 }
 
 function go(screen) {
@@ -635,8 +636,8 @@ app.addEventListener("keydown", (event) => {
   }
 });
 
-document.title = STRINGS.title;
 render();
+loadUi(render);
 loadSetup();
 loadSaved();
 loadSettings();

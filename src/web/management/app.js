@@ -369,10 +369,11 @@ function render() {
       ? `<i class="dot" title="${esc(STRINGS.needsAttention)}" aria-label="${esc(STRINGS.needsAttention)}"></i>` : "";
     return `<button class="${S.tab === key ? "on" : ""}" data-tab="${key}"><b>${icon}${dot}</b>${esc(label)}</button>`;
   }).join("");
-  app.innerHTML = `<header class="top"><h1>${esc(STRINGS.manageTitle)}</h1>
+  app.innerHTML = `<header class="top">${brandHtml(STRINGS.manageTitle)}
     ${name ? `<span class="pill">${esc(name)}</span>` : ""}</header>
     <div class="content">${error}${content}</div><nav class="tabs">${nav}</nav>${sheet()}`;
-  document.title = name ? `${name} · ${STRINGS.manageTitle}` : STRINGS.manageTitle;
+  // With a title, the hostname tells devices apart; without one, the heading says what this is.
+  document.title = UI.title ? tabTitle(name) : tabTitle(name, STRINGS.manageTitle);
 }
 
 app.addEventListener("click", (event) => {
@@ -462,6 +463,7 @@ app.addEventListener("keydown", (event) => {
 });
 
 render();
+loadUi(render);
 loadStatus();
 loadNetworks();
 loadSettings();
