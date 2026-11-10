@@ -4,12 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-10
+
+Settings for the Owner to fill in, and diagnostics.
+
 ### Added
 - Settings (EP06): `esp.settings()` declares text, password, number, checkbox and select Settings, in Sections, each with validation (`.required()`, `.maxLength()`, `.range()`, `.option()`, `.validate()`). Values are stored in NVS only when they differ from the default. `esp.onSettingChanged()` reports changes, `esp.settings().complete()` says whether required ones are filled in, and `esp.settingsReset()` now returns them to their defaults. The Provisioning Portal shows them during first setup, one screen per Section, and from its list of Saved Networks afterwards, through `GET /api/settings`, `POST /api/settings` and `POST /api/settings/check`. Settings marked `.editableInManagement()` appear in a *Settings* tab in the Management Interface, whose Device tab also has a Settings Reset, `POST /api/settings-reset`. A new example, `Settings`, and a guide in the README (#29, #30, #31, #32).
 - Log handler: `esp.setLogHandler(fn)` sends the library's log lines to the sketch instead of `Serial`, as an `espmgr::LogEntry` with the level, time, tag, message and finished line; `nullptr` goes back to `Serial`. It doesn't change the level, which `esp.setLogLevel()` still sets (#33).
 - Device status: the DNS server and why the device last started (power-on, reset button or USB, software restart, crash, watchdog, brownout or deep sleep), in `esp.status()` (`dns`, `resetReason`) and on the status pages (#34).
 - Connection History: `esp.connectionHistory().entries()` lists the most recent connection events, oldest first: started, connected (SSID, signal, channel), connect failed (SSID, reason) and disconnected (reason), each with the time since start-up. 20 are kept by default, `setCapacity()` before `begin()` changes it (0 to 50). It's kept in RAM, so a restart clears it (#35).
 - The Management Interface's Status tab lists the Connection History as *Recent events*, newest first, from `GET /api/history`. The Provisioning Portal doesn't serve it (#36).
+- A new example, `Diagnostics`, and a guide to the log handler, the status and the Connection History in the README (#37).
 
 ## [0.1.0] - 2026-11-01
 
@@ -33,5 +38,6 @@ The first release: connecting, setup from a phone and an optional management pag
 - Examples: `Basic`, and `Button`, which opens the Provisioning Portal on a short press of the BOOT button and starts a Network Reset or Factory Reset when it's held (#20).
 - Hardware interfaces (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`) with ESP32 implementations, fakes and host unit tests, plus on-device tests and the scripts to build and run them (#3, #28).
 
-[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/richarddeweerd/esp-manager/releases/tag/v0.1.0
