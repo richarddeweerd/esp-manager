@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- Branding (EP15): `esp.ui()` sets a title (`setTitle()`), a logo (`setLogo()`, SVG, PNG, JPEG or WebP), a theme (`setTheme()`, light, dark or following the phone) and a CSS string (`setCss()`) for both web pages, at any time. Both sites serve them at `GET /api/ui`, `GET /custom.css` and `GET /logo` (#38).
+
 ## [0.2.0] - 2026-11-10
 
 Settings for the Owner to fill in, and diagnostics.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EspManagerVersion.h"
+#include "core/Branding.h"
 #include "core/ConnectionHistory.h"
 #include "core/DeviceName.h"
 #include "core/DeviceStatus.h"
@@ -143,6 +144,11 @@ public:
     // `esp.connectionHistory().setCapacity(n)`, 0 to 50. Kept in RAM, so a restart clears it.
     ConnectionHistory& connectionHistory();
 
+    // The Branding of the web pages (EP15): a title, logo, theme and CSS for the Provisioning
+    // Portal and the Management Interface, for example `esp.ui().setTitle("Acme Thermostat");`.
+    // May be called at any time.
+    Branding& ui();
+
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();
@@ -201,9 +207,11 @@ private:
     WebRoutes routes_{platform_.wifi, platform_.http};
     SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
     SettingsApi settingsApi_{routes_, settings_, log_};
+    Branding branding_{routes_, log_};
     ManagementInterface management_{routes_,
                                     networksApi_,
                                     settingsApi_,
+                                    branding_,
                                     platform_.storage,
                                     platform_.clock,
                                     connection_,
@@ -218,6 +226,7 @@ private:
                                networksApi_,
                                settings_,
                                settingsApi_,
+                               branding_,
                                platform_.clock,
                                scanner_,
                                networks_,

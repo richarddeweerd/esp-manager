@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Branding.h"
 #include "core/Clock.h"
 #include "core/DeviceStatus.h"
 #include "core/Events.h"
@@ -64,15 +65,15 @@ public:
 
     // `deviceName` gives the access point's default SSID, `status` what GET /api/status shows.
     ProvisioningPortal(WifiDriver& wifi, WebRoutes& routes, SavedNetworksApi& networksApi,
-                       Settings& settings, SettingsApi& settingsApi, Clock& clock,
-                       NetworkScanner& scanner, SavedNetworks& networks, WifiConnection& connection,
-                       ManagementInterface& management, Events& events, Logger& log,
-                       std::function<std::string()> deviceName,
+                       Settings& settings, SettingsApi& settingsApi, Branding& branding,
+                       Clock& clock, NetworkScanner& scanner, SavedNetworks& networks,
+                       WifiConnection& connection, ManagementInterface& management, Events& events,
+                       Logger& log, std::function<std::string()> deviceName,
                        std::function<DeviceStatus()> status)
         : wifi_(wifi), routes_(routes), networksApi_(networksApi), settings_(settings),
-          settingsApi_(settingsApi), http_(routes.http()), clock_(clock), scanner_(scanner),
-          networks_(networks), connection_(connection), management_(management), events_(events),
-          log_(log), deviceName_(std::move(deviceName)), status_(std::move(status))
+          settingsApi_(settingsApi), branding_(branding), http_(routes.http()), clock_(clock),
+          scanner_(scanner), networks_(networks), connection_(connection), management_(management),
+          events_(events), log_(log), deviceName_(std::move(deviceName)), status_(std::move(status))
     {
     }
 
@@ -183,6 +184,7 @@ private:
     SavedNetworksApi& networksApi_;
     Settings& settings_;
     SettingsApi& settingsApi_;
+    Branding& branding_;
     HttpServer& http_;
     Clock& clock_;
     NetworkScanner& scanner_;

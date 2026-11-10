@@ -259,6 +259,11 @@ ConnectionHistory& EspManager::connectionHistory()
     return history_;
 }
 
+Branding& EspManager::ui()
+{
+    return branding_;
+}
+
 SavedNetworks& EspManager::networks()
 {
     return networks_;

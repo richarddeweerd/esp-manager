@@ -200,6 +200,8 @@ void ManagementInterface::registerRoutes()
                                 {/*add=*/true, /*removeLast=*/false});
     settingsApi_.registerRoutes(Site::Management,
                                 [this](const HttpRequest& request) { return authorize(request); });
+    branding_.registerRoutes(Site::Management,
+                             [this](const HttpRequest& request) { return authorize(request); });
     registerAction("/api/restart", "restart", &Actions::restart);
     registerAction("/api/network-reset", "Network Reset", &Actions::networkReset);
     registerAction("/api/factory-reset", "Factory Reset", &Actions::factoryReset);

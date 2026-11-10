@@ -329,6 +329,12 @@ void ProvisioningPortal::registerRoutes()
                                     seen();
                                     return true;
                                 });
+    branding_.registerRoutes(Site::Portal,
+                             [this](const HttpRequest&)
+                             {
+                                 seen();
+                                 return true;
+                             });
     // Every other address: the phones' connectivity checks and whatever the Owner typed.
     routes_.onNotFound(Site::Portal,
                        [this](const HttpRequest&)
