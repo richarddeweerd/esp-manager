@@ -411,6 +411,12 @@ void setup()
 
     clearManagementPassword();
     esp.management().enable();
+    // Checked by the host in test_management_interface_logs_the_host_in.
+    static const uint8_t kLogo[] = "<svg xmlns=\"http://www.w3.org/2000/svg\"/>";
+    esp.ui().setTitle("EspManager rig");
+    esp.ui().setLogo(kLogo, sizeof(kLogo) - 1, "image/svg+xml");
+    esp.ui().setTheme(espmgr::Theme::Dark);
+    esp.ui().setCss(":root { --accent: #0f766e; }");
     // Room for every event of this run, so Started is still first at the end.
     esp.connectionHistory().setCapacity(espmgr::ConnectionHistory::kMaxCapacity);
     esp.setLogLevel(LogLevel::Info);

@@ -4,9 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-10
+
+Branding for the web pages.
+
 ### Added
 - Branding (EP15): `esp.ui()` sets a title (`setTitle()`), a logo (`setLogo()`, SVG, PNG, JPEG or WebP), a theme (`setTheme()`, light, dark or following the phone) and a CSS string (`setCss()`) for both web pages, at any time. Both sites serve them at `GET /api/ui`, `GET /custom.css` and `GET /logo` (#38).
 - Both web pages show the Branding: the title as their heading, with the built-in one below it, the logo in the header and as the tab icon, the theme, and the Developer's CSS after their own. Their dark colours now hang off `data-theme="dark"` on `<html>`, which the Developer's CSS can use too (#39).
+- A new example, `Branding`, and a guide to the title, logo, theme and the supported custom properties in the README (#40).
 
 ## [0.2.0] - 2026-11-10
 
@@ -42,6 +47,7 @@ The first release: connecting, setup from a phone and an optional management pag
 - Examples: `Basic`, and `Button`, which opens the Provisioning Portal on a short press of the BOOT button and starts a Network Reset or Factory Reset when it's held (#20).
 - Hardware interfaces (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`) with ESP32 implementations, fakes and host unit tests, plus on-device tests and the scripts to build and run them (#3, #28).
 
-[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/richarddeweerd/esp-manager/releases/tag/v0.1.0

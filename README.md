@@ -22,7 +22,7 @@ void loop()
 
 That's the whole [Basic example](examples/Basic). On a new board it opens a Wi-Fi access point with a setup page; once the Owner has picked a network there, the device joins it, and after every restart it reconnects by itself.
 
-Version `0.2.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
+Version `0.3.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
 
 - [What it does](#what-it-does)
 - [Terms](#terms)
@@ -42,9 +42,10 @@ Version `0.2.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHA
 - An optional, password-protected management page on the Owner's own network: the Saved Networks, the device's status, chosen settings, a restart and the resets.
 - Events for connection and setup changes, always called from inside `process()`.
 - Diagnostics: the library's log lines in your own handler, a Connection History of recent connects, failures and drops, and why the device last started.
+- Your product's look on both web pages: a title, a logo, a light or dark theme and your own CSS.
 - Everything happens in `process()`; nothing waits unless you ask for it.
 
-Planned for later versions: theming of the pages, over-the-air updates and NTP time.
+Planned for later versions: over-the-air updates and NTP time.
 
 ## Terms
 
@@ -57,6 +58,7 @@ The README uses a few words in a fixed sense:
 - **Management Interface**: the management site, off unless you turn it on. A password-protected page on the device's address in the Owner's own network, once the device is connected.
 - **Setting**: a named value your firmware declares and the Owner fills in on the web pages, such as a server's name. Settings are grouped in **Sections**.
 - **Connection History**: the device's record of its recent connection events, kept in memory until it restarts.
+- **Branding**: your title, logo, theme and CSS for the web pages.
 
 ## Quick start
 
@@ -70,7 +72,7 @@ platform = https://github.com/pioarduino/platform-espressif32/releases/download/
 framework = arduino
 board = esp32dev
 monitor_speed = 115200
-lib_deps = richarddeweerd/EspManager@^0.2.0
+lib_deps = richarddeweerd/EspManager@^0.3.0
 ```
 
 Keep the `richarddeweerd/` part: the Registry also has two older ESP8266 libraries called ESPManager and espManager, which are something else.
@@ -426,10 +428,40 @@ for (const espmgr::ConnectionEvent& event : esp.connectionHistory().entries())  
 
 It keeps the last 20 events; `esp.connectionHistory().setCapacity(n)` before `begin()` changes that, from 0 (keep none) to 50, at about 50 bytes each. A network the Owner tests in the Provisioning Portal isn't recorded unless the device joins it. A restart clears the history, while the Network Reset and Settings Reset leave it; the [status](#status) says why the device last started. The Management Interface shows it on its Status tab as *Recent events*. The Provisioning Portal doesn't, since anyone in range can open it.
 
+### Branding
+
+Both web pages can carry your product's look. Set it at any time; the pages read it each time they load:
+
+```cpp
+static const uint8_t logo[] = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\">…</svg>";
+
+esp.ui().setTitle("Acme Thermostat");                         // at most 64 bytes
+esp.ui().setLogo(logo, sizeof(logo) - 1, "image/svg+xml");    // or image/png, image/jpeg, image/webp
+esp.ui().setTheme(espmgr::Theme::Dark);                       // Auto (follow the phone), Light or Dark
+esp.ui().setCss(":root { --accent: #0f766e; }");
+```
+
+- **Title**: the heading of both sites, with the built-in one (*Wi-Fi setup*, *Device management*) below it, and the start of the browser tab's title. An empty title goes back to none. A title over 64 bytes or with a control character is refused: the call returns false, logs at `Error` and changes nothing.
+- **Logo**: shown next to the title and used as the tab's icon. The bytes aren't copied, so keep them in a `static const` array, as above; `setLogo(nullptr, 0, nullptr)` removes it. Keep it small: SVG is usually a few hundred bytes. Another type is refused like a bad title.
+- **Theme**: `Auto`, the default, follows the phone's light or dark setting. There's no switch for the Owner.
+- **CSS**: loaded after the pages' own style, so it wins. The string isn't copied either, so use a string literal. Restyle the pages through their custom properties; the class names may change between versions. Rules under `[data-theme="dark"]` apply in the dark theme, whether the phone or `setTheme()` chose it, so put them after your `:root` rule.
+
+| Property | What it colours or sets |
+| --- | --- |
+| `--accent`, `--accent-text` | buttons, links and highlights, and the text on them |
+| `--bg`, `--surface`, `--surface-2` | the page, cards and fields, and secondary buttons |
+| `--text`, `--muted`, `--line` | text, secondary text, borders |
+| `--ok`, `--warn`, `--bad` | success, warnings and errors |
+| `--font` | the font, the system font by default; there's no internet during setup, so web fonts can't load |
+| `--radius`, `--radius-sm`, `--space`, `--shadow` | corners, spacing and card shadows |
+
+The pages fetch these from `GET /api/ui`, `GET /custom.css` and `GET /logo`, which the Provisioning Portal serves openly and the Management Interface behind its login.
+
 ## Examples
 
 - [Basic](examples/Basic): the smallest sketch, `begin()` and `process()`, with an optional wait for the connection.
 - [Settings](examples/Settings): your own settings in two Sections, with validation, a password, some marked for the Management Interface, and `onSettingChanged`.
+- [Branding](examples/Branding): a title, an SVG logo, a fixed light theme and a teal accent in your own CSS, on both web pages.
 - [Diagnostics](examples/Diagnostics): a log handler printing the library's lines in its own format, and every minute the status, with why the device last started, and the Connection History.
 - [Button](examples/Button): the board's BOOT button opens the Provisioning Portal on a short press, starts a Network Reset when held for 5 seconds and a Factory Reset when held for 10, acting when it's let go. It's polled from `loop()` without `delay()`, and the serial monitor says what letting go will do. Build with `-D BUTTON_PIN=<n>` for another pin.
 
