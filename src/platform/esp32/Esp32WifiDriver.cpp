@@ -286,6 +286,16 @@ Ipv4Address Esp32WifiDriver::gatewayIp() const
     return Ipv4Address(ip[0], ip[1], ip[2], ip[3]);
 }
 
+Ipv4Address Esp32WifiDriver::dnsIp() const
+{
+    if (status() != StationStatus::Connected)
+    {
+        return Ipv4Address();
+    }
+    const IPAddress ip = WiFi.dnsIP(0);
+    return Ipv4Address(ip[0], ip[1], ip[2], ip[3]);
+}
+
 int8_t Esp32WifiDriver::rssi() const
 {
     return status() == StationStatus::Connected ? WiFi.RSSI() : 0;

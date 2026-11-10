@@ -3,6 +3,7 @@
 #include "core/Events.h"
 #include "core/Ipv4Address.h"
 #include "core/JsonWriter.h"
+#include "core/System.h"
 
 #include <cstdint>
 #include <string>
@@ -21,6 +22,8 @@ struct DeviceStatus
     // Unset while not connected.
     Ipv4Address ip;
     Ipv4Address gateway;
+    // The first DNS server.
+    Ipv4Address dns;
     // dBm; 0 while not connected.
     int8_t rssi = 0;
     uint8_t channel = 0;
@@ -28,6 +31,8 @@ struct DeviceStatus
     std::string hostname;
     std::string mac;  // "24:6f:28:ab:cd:ef"
     uint64_t uptimeMs = 0;
+    // Why the device last started.
+    ResetReason resetReason = ResetReason::Other;
     uint32_t freeHeap = 0;
     std::string chip;
     // Set by the Developer with esp.setFirmwareVersion(); empty if not.

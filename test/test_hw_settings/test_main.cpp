@@ -224,6 +224,7 @@ void firstBoot()
 
 void test_values_survive_the_restart()
 {
+    TEST_ASSERT_EQUAL(espmgr::ResetReason::Software, esp.status().resetReason);
     TEST_ASSERT_EQUAL_STRING("broker.example", text->value().c_str());
     TEST_ASSERT_TRUE(longText->value() == longValue());
     TEST_ASSERT_EQUAL_INT32(-5, number->value());

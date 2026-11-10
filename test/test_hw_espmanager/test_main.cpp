@@ -180,6 +180,15 @@ void test_status_matches_the_hardware()
     TEST_ASSERT_EQUAL_STRING(WiFi.localIP().toString().c_str(), status.ip.toString().c_str());
     TEST_ASSERT_EQUAL_STRING(WiFi.gatewayIP().toString().c_str(),
                              status.gateway.toString().c_str());
+    // The Pi's access point is the test network's DNS server too.
+    TEST_ASSERT_EQUAL_STRING(WiFi.dnsIP(0).toString().c_str(), status.dns.toString().c_str());
+    TEST_ASSERT_EQUAL_STRING("10.42.0.1", status.dns.toString().c_str());
+    // The host resets the board after flashing it: through EN on an ESP32 (which reports
+    // power-on), over USB on an ESP32-S3.
+    const espmgr::ResetReason reset = status.resetReason;
+    TEST_ASSERT_TRUE_MESSAGE(reset == espmgr::ResetReason::PowerOn ||
+                                 reset == espmgr::ResetReason::External,
+                             espmgr::toString(reset));
     TEST_ASSERT_INT_WITHIN(15, WiFi.RSSI(), status.rssi);
     TEST_ASSERT_EQUAL_UINT8(WiFi.channel(), status.channel);
     String mac = WiFi.macAddress();

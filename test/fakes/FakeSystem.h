@@ -19,6 +19,11 @@ public:
         return chip;
     }
 
+    ResetReason resetReason() const override
+    {
+        return reset;
+    }
+
     void restart() override
     {
         ++restarts;
@@ -27,6 +32,7 @@ public:
     uint32_t heap = 180000;
     std::string chip = "ESP32-C3 rev 4";
     int restarts = 0;
+    ResetReason reset = ResetReason::PowerOn;
 };
 
 }  // namespace espmgr

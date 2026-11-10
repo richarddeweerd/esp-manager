@@ -109,6 +109,8 @@ public:
 
     virtual Ipv4Address localIp() const = 0;
     virtual Ipv4Address gatewayIp() const = 0;
+    // The first DNS server; unset while not connected.
+    virtual Ipv4Address dnsIp() const = 0;
     virtual int8_t rssi() const = 0;
     virtual MacAddress macAddress() const = 0;
 };

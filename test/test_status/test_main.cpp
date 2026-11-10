@@ -56,6 +56,7 @@ void test_connected_status_has_the_connection_details()
     TEST_ASSERT_EQUAL_STRING("Home", status.ssid.c_str());
     TEST_ASSERT_EQUAL_STRING("192.168.1.50", status.ip.toString().c_str());
     TEST_ASSERT_EQUAL_STRING("192.168.1.1", status.gateway.toString().c_str());
+    TEST_ASSERT_EQUAL_STRING("192.168.1.53", status.dns.toString().c_str());
     TEST_ASSERT_EQUAL_INT8(-55, status.rssi);
     TEST_ASSERT_EQUAL_UINT8(11, status.channel);
 }
@@ -71,6 +72,7 @@ void test_status_has_the_device_details()
     TEST_ASSERT_EQUAL_STRING("24:6f:28:ab:cd:ef", status.mac.c_str());
     TEST_ASSERT_EQUAL_UINT64(12345, status.uptimeMs);
     TEST_ASSERT_EQUAL_UINT32(123456, status.freeHeap);
+    TEST_ASSERT_EQUAL(espmgr::ResetReason::PowerOn, status.resetReason);
     TEST_ASSERT_EQUAL_STRING("ESP32-C3 rev 4", status.chip.c_str());
     TEST_ASSERT_EQUAL_STRING("1.4.2", status.firmwareVersion.c_str());
     TEST_ASSERT_EQUAL_STRING(ESPMGR_VERSION, status.libraryVersion.c_str());
@@ -84,6 +86,7 @@ void test_not_connected_status_leaves_the_connection_details_empty()
     TEST_ASSERT_EQUAL(ConnectionState::Connecting, status.connection);
     TEST_ASSERT_EQUAL_STRING("Home", status.ssid.c_str());
     TEST_ASSERT_TRUE(status.ip.isUnset());
+    TEST_ASSERT_TRUE(status.dns.isUnset());
     TEST_ASSERT_EQUAL_INT8(0, status.rssi);
     TEST_ASSERT_EQUAL_UINT8(0, status.channel);
 
@@ -106,10 +109,34 @@ void test_status_json_has_every_field()
     espmgr::writeJson(json, d.esp.status());
     const std::string expected =
         R"({"connection":"Connected","portal":"Off","ssid":"Home","ip":"192.168.1.50",)"
-        R"("gateway":"192.168.1.1","rssi":-55,"channel":11,"hostname":"esp-abcdef",)"
-        R"("mac":"24:6f:28:ab:cd:ef","uptimeMs":5000,"freeHeap":180000,)"
+        R"("gateway":"192.168.1.1","dns":"192.168.1.53","rssi":-55,"channel":11,)"
+        R"("hostname":"esp-abcdef","mac":"24:6f:28:ab:cd:ef","uptimeMs":5000,)"
+        R"("resetReason":"power-on","freeHeap":180000,)"
         R"("chip":"ESP32-C3 rev 4","firmware":"1.4.2","library":")" ESPMGR_VERSION R"("})";
     TEST_ASSERT_EQUAL_STRING(expected.c_str(), json.str().c_str());
+}
+
+void test_status_reports_why_the_device_started()
+{
+    Device d;
+    d.fakes.system.reset = espmgr::ResetReason::Brownout;
+    TEST_ASSERT_EQUAL(espmgr::ResetReason::Brownout, d.esp.status().resetReason);
+    espmgr::JsonWriter json;
+    espmgr::writeJson(json, d.esp.status());
+    TEST_ASSERT_TRUE(json.str().find(R"("resetReason":"brownout")") != std::string::npos);
+}
+
+void test_reset_reasons_have_short_codes()
+{
+    using espmgr::ResetReason;
+    TEST_ASSERT_EQUAL_STRING("power-on", espmgr::toString(ResetReason::PowerOn));
+    TEST_ASSERT_EQUAL_STRING("external", espmgr::toString(ResetReason::External));
+    TEST_ASSERT_EQUAL_STRING("software", espmgr::toString(ResetReason::Software));
+    TEST_ASSERT_EQUAL_STRING("crash", espmgr::toString(ResetReason::Crash));
+    TEST_ASSERT_EQUAL_STRING("watchdog", espmgr::toString(ResetReason::Watchdog));
+    TEST_ASSERT_EQUAL_STRING("brownout", espmgr::toString(ResetReason::Brownout));
+    TEST_ASSERT_EQUAL_STRING("deep-sleep", espmgr::toString(ResetReason::DeepSleep));
+    TEST_ASSERT_EQUAL_STRING("other", espmgr::toString(ResetReason::Other));
 }
 
 void test_portal_serves_the_status_on_its_access_point()
@@ -145,6 +172,8 @@ int main()
     RUN_TEST(test_status_has_the_device_details);
     RUN_TEST(test_not_connected_status_leaves_the_connection_details_empty);
     RUN_TEST(test_status_json_has_every_field);
+    RUN_TEST(test_status_reports_why_the_device_started);
+    RUN_TEST(test_reset_reasons_have_short_codes);
     RUN_TEST(test_portal_serves_the_status_on_its_access_point);
     RUN_TEST(test_status_never_holds_the_password);
     return UNITY_END();
