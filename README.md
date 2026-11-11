@@ -460,6 +460,7 @@ The pages fetch these from `GET /api/ui`, `GET /custom.css` and `GET /logo`, whi
 ## Examples
 
 - [Basic](examples/Basic): the smallest sketch, `begin()` and `process()`, with an optional wait for the connection.
+- [DeviceName](examples/DeviceName): the device's own name prefix, so each board is `lamp-` plus its MAC digits, and a WPA2 password for the Provisioning Portal's access point.
 - [Settings](examples/Settings): your own settings in two Sections, with validation, a password, some marked for the Management Interface, and `onSettingChanged`.
 - [Branding](examples/Branding): a title, an SVG logo, a fixed light theme and a teal accent in your own CSS, on both web pages.
 - [Diagnostics](examples/Diagnostics): a log handler printing the library's lines in its own format, and every minute the status, with why the device last started, and the Connection History.
