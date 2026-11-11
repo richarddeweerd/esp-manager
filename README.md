@@ -72,7 +72,7 @@ platform = https://github.com/pioarduino/platform-espressif32/releases/download/
 framework = arduino
 board = esp32dev
 monitor_speed = 115200
-lib_deps = richarddeweerd/EspManager@^0.3.0
+lib_deps = richarddeweerd/EspManager@^0.4.0
 ```
 
 Keep the `richarddeweerd/` part: the Registry also has two older ESP8266 libraries called ESPManager and espManager, which are something else.
