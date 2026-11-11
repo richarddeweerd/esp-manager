@@ -201,7 +201,8 @@ def digest_get(url, path, password, count, challenge=None):
 def management_checks(ip, hostname):
     """Runs the host side of test_management_interface_logs_the_host_in: the Management
     Interface asks for Digest credentials, refuses a wrong password and a replayed request, and
-    serves the status and the page to the right one. Returns "ok" or what failed."""
+    serves the status, the page and the Branding the test set to the right one. Returns "ok" or
+    what failed."""
     url = f"http://{ip}"
     try:
         status, _, _, challenge = digest_get(url, "/api/status", "wrong password", 1)
@@ -227,6 +228,25 @@ def management_checks(ip, hostname):
             return f"/ answered {status} with Content-Encoding {headers.get('Content-Encoding')!r}"
         if '"manageTitle"' not in gzip.decompress(body).decode():
             return "/ is not the Management Interface page"
+
+        # The Branding test_hw_espmanager sets in setup().
+        expected = {
+            "/api/ui": ("application/json",
+                        b'{"title":"EspManager rig","logo":true,"theme":"dark"}'),
+            "/custom.css": ("text/css", b":root { --accent: #0f766e; }"),
+            "/logo": ("image/svg+xml", None),
+        }
+        for count, (path, (kind, content)) in enumerate(expected.items(), start=3):
+            status, headers, body, _ = digest_get(url, path, MANAGEMENT_PASSWORD, count,
+                                                  challenge)
+            if status != 200 or headers.get("Content-Type") != kind or \
+                    headers.get("Cache-Control") != "no-cache":
+                return (f"{path} answered {status}, {headers.get('Content-Type')!r}, "
+                        f"Cache-Control {headers.get('Cache-Control')!r}")
+            if content is not None and body != content:
+                return f"{path} answered {body!r}"
+            if content is None and not body.startswith(b"<svg"):
+                return f"{path} is not the logo"
     except (OSError, RuntimeError, ValueError, urllib.error.URLError) as error:
         return f"request failed: {error}"
     return "ok"
