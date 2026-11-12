@@ -4,11 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-12
+
+Network Time.
+
 ### Added
 
 - Network Time (#41): `esp.ntp()` syncs the clock from NTP servers once the station is connected. Off until `enable()`; three servers (`pool.ntp.org`, `time.google.com`, `time.cloudflare.com` by default, `setServer()`, `addFallbackServer()`, `useDhcpServer()`), a POSIX time zone (`setTimezone()`, `UTC0` by default, applied at once), `setSyncInterval()` (1 hour by default), `sync()`, `synchronised()` and `lastSync()`. `esp.onTimeSynced()` and `esp.onTimeSyncFailed()` (no answer within 30 s); `esp.status().time` and `GET /api/status` report it. It never blocks `process()` and never touches the Wi-Fi connection.
 - The Owner's time zone (#42): `esp.ntp().ownerCanEdit()` adds a "Time" Section to the Settings, with a list of named zones (the phone's own preselected) and a *Daylight saving time* checkbox for zones that have it; `ownerCanEditServers()` adds two NTP server fields, and `editableInManagement()` shows the Section in the Management Interface. The Owner's zone overrides `setTimezone()` until a Settings Reset.
 - The Management Interface's Status tab shows a *Time* group with *Synchronise now* (`POST /api/time/sync`) while Network Time is on, and "Recent events" in local time once the clock is synchronised.
+- `examples/NetworkTime` (#43): Network Time with the Owner's time zone, printing the local time every minute. The README has a Network Time guide, and the hardware test syncs through the test rig.
 
 ## [0.4.0] - 2026-11-12
 
@@ -61,7 +66,8 @@ The first release: connecting, setup from a phone and an optional management pag
 - Examples: `Basic`, and `Button`, which opens the Provisioning Portal on a short press of the BOOT button and starts a Network Reset or Factory Reset when it's held (#20).
 - Hardware interfaces (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`) with ESP32 implementations, fakes and host unit tests, plus on-device tests and the scripts to build and run them (#3, #28).
 
-[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.1.0...v0.2.0
