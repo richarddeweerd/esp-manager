@@ -186,5 +186,22 @@
   "needsAttention": "needs attention",
   "clearPassword": "Remove the stored password",
   "keepPassword": "Leave empty to keep the stored password.",
-  "noSelection": "Choose…"
+  "noSelection": "Choose…",
+  "time": "Time",
+  "timeZone": "Time zone",
+  "daylightSaving": "Daylight saving time",
+  "daylightSavingHint": "Untick to keep the standard time all year.",
+  "ntpServer": "NTP server",
+  "ntpFallback": "Fallback NTP server",
+  "defaultServer": "Empty uses the default",
+  "localTime": "Local time",
+  "synchronised": "Synchronised",
+  "lastSync": "Last sync",
+  "timeServer": "Time server",
+  "syncNow": "Synchronise now",
+  "syncStarted": "Synchronising…",
+  "syncFailed": "Couldn't start a sync.",
+  "yes": "Yes",
+  "no": "No",
+  "noDst": "{zone}, without daylight saving"
 }

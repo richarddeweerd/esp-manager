@@ -122,7 +122,71 @@ function showSettings(form, data) {
       form.values[setting.key] = setting.type === "password" ? "" : setting.value;
     }
   }
+  // No zone picked yet: offer the phone's own.
+  if (form.values["time-zone"] === "") {
+    const phone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (ZONES[phone]) form.values["time-zone"] = phone;
+  }
 }
+
+// --- The Time Section (Network Time) ---
+//
+// The device stores the zone's name, the daylight saving choice and the POSIX string the page
+// works out from ZONES (zones.js), which the device applies.
+
+// A POSIX TZ string's standard part ("CET-1" of "CET-1CEST,M3.5.0,M10.5.0/3") and whether a
+// daylight saving part follows it.
+function splitPosix(posix) {
+  const match = /^(<[^>]+>|[A-Za-z]+)[+-]?\d{1,2}(:\d{2}){0,2}/.exec(posix || "");
+  if (!match) return { standard: posix || "", dst: false };
+  return { standard: match[0], dst: match[0].length < posix.length };
+}
+
+const zoneHasDst = (zone) => splitPosix(ZONES[zone]).dst;
+
+// The POSIX string for the zone and daylight saving choice in `values`, or the stored one if the
+// zone isn't in the list.
+function zonePosix(values) {
+  const posix = ZONES[values["time-zone"]];
+  if (!posix) return values["time-posix"] || "";
+  return values["time-dst"] === "0" ? splitPosix(posix).standard : posix;
+}
+
+const zoneLabel = (zone) => zone.replace(/_/g, " ").replace(/\//g, " / ");
+
+// The zone picker, grouped by region, and the daylight saving checkbox for zones that have it.
+function zoneFields(form, section) {
+  const zone = form.values["time-zone"];
+  const groups = {};
+  for (const name of Object.keys(ZONES)) {
+    const region = name.includes("/") ? name.split("/")[0] : "";
+    (groups[region] = groups[region] || []).push(name);
+  }
+  if (zone && !ZONES[zone]) groups[""] = [zone, ...(groups[""] || [])];
+  const option = (name) => `<option value="${esc(name)}" ${name === zone ? "selected" : ""}>${esc(zoneLabel(name))}</option>`;
+  const options = Object.keys(groups).sort().map((region) => region
+    ? `<optgroup label="${esc(region)}">${groups[region].map(option).join("")}</optgroup>`
+    : groups[region].map(option).join("")).join("");
+  const blank = zone ? "" : `<option value="">${esc(STRINGS.noSelection)}</option>`;
+  const errors = ["time-zone", "time-posix"].map((key) => form.settingErrors[key])
+    .filter(Boolean).map((problem) => `<p class="error">${esc(problem)}</p>`).join("");
+  let html = `<div class="field"><label for="setting-time-zone">${esc(STRINGS.timeZone)}</label>
+    <select id="setting-time-zone" data-setting="time-zone" data-zone>${blank}${options}</select></div>${errors}`;
+  if (section.settings.some((setting) => setting.key === "time-dst")) {
+    html += `<div id="time-dst-row" ${zoneHasDst(zone) ? "" : "hidden"}>
+      <label class="check setting"><input type="checkbox" data-setting="time-dst"
+        ${form.values["time-dst"] !== "0" ? "checked" : ""}> ${esc(STRINGS.daylightSaving)}</label>
+      <p class="muted hint">${esc(STRINGS.daylightSavingHint)}</p></div>`;
+  }
+  return html;
+}
+
+// Shows the daylight saving checkbox only for a zone that has daylight saving.
+document.addEventListener("change", (event) => {
+  if (!event.target.matches("[data-zone]")) return;
+  const row = document.getElementById("time-dst-row");
+  if (row) row.hidden = !zoneHasDst(event.target.value);
+});
 
 // The form fields for the Settings in these Sections.
 function settingFormFields(form, list) {
@@ -130,6 +194,7 @@ function settingFormFields(form, list) {
   for (const section of list) {
     for (const setting of section.settings) {
       if (form.clears[setting.key]) fields[`clear.${setting.key}`] = "1";
+      else if (setting.key === "time-posix") fields["setting.time-posix"] = zonePosix(form.values);
       else fields[`setting.${setting.key}`] = form.values[setting.key];
     }
   }
@@ -154,12 +219,15 @@ function readSettingFields(form, root) {
   }
 }
 
+// The Time Section's labels come from the page text, not from the device.
+const TIME_LABELS = { "time-server": "ntpServer", "time-fallback": "ntpFallback" };
+
 // One Setting's field, with its error if it has one.
 function settingField(form, setting) {
   const key = esc(setting.key);
   const id = `setting-${key}`;
   const value = form.values[setting.key];
-  const label = esc(setting.label);
+  const label = esc(TIME_LABELS[setting.key] ? STRINGS[TIME_LABELS[setting.key]] : setting.label);
   const problem = form.settingErrors[setting.key];
   const error = problem ? `<p class="error">${esc(problem)}</p>` : "";
   if (setting.type === "checkbox") {
@@ -188,8 +256,10 @@ function settingField(form, setting) {
       }
     }
   } else {
+    const placeholder = setting.key === "time-server" || setting.key === "time-fallback"
+      ? ` placeholder="${esc(STRINGS.defaultServer)}"` : "";
     control = `<input id="${id}" data-setting="${key}" autocomplete="off" autocapitalize="none"
-      maxlength="${setting.maxLength}" value="${esc(value)}">`;
+      maxlength="${setting.maxLength}" value="${esc(value)}"${placeholder}>`;
   }
   // `after` stays out of .field, whose styling is for the text boxes.
   return `<div class="field"><label for="${id}">${label}</label>${control}</div>${after}${error}`;
@@ -200,7 +270,11 @@ function settingFields(form, section) {
   const toggle = section.settings.some((setting) => setting.type === "password")
     ? `<label class="check"><input type="checkbox" data-act="toggle" ${form.showPassword ? "checked" : ""}>
         ${esc(STRINGS.showPassword)}</label>` : "";
-  return section.settings.map((setting) => settingField(form, setting)).join("") + toggle;
+  const time = section.settings.some((setting) => setting.key === "time-zone");
+  const fields = section.settings.filter((setting) => !(time && /^time-(zone|dst|posix)$/.test(setting.key)))
+    .map((setting) => settingField(form, setting)).join("");
+  return (time ? zoneFields(form, section) : "") + fields + toggle;
 }
 
-const sectionTitle = (section) => section.title || STRINGS.general;
+const isTimeSection = (section) => section.settings.some((setting) => setting.key === "time-zone");
+const sectionTitle = (section) => isTimeSection(section) ? STRINGS.time : section.title || STRINGS.general;

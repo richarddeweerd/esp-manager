@@ -216,6 +216,18 @@ void ManagementInterface::registerRoutes()
                    routes_.http().send(done ? 200 : 500, "application/json",
                                        done ? "{\"ok\":true}" : "{\"error\":\"not-stored\"}");
                });
+    // Synchronise now (US18.6.1), at once: the answer says whether a sync started.
+    routes_.on(Site::Management, HttpMethod::Post, "/api/time/sync",
+               [this](const HttpRequest& request)
+               {
+                   if (!allowAction(request, "time sync"))
+                   {
+                       return;
+                   }
+                   const bool started = actions_.syncTime && actions_.syncTime();
+                   routes_.http().send(started ? 200 : 409, "application/json",
+                                       started ? "{\"ok\":true}" : "{\"error\":\"time-off\"}");
+               });
 }
 
 void ManagementInterface::registerAction(const char* path, const char* name,

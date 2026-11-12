@@ -28,9 +28,9 @@ bool printable(const std::string& text, size_t maxLength, char first)
 }  // namespace
 
 NetworkTime::NetworkTime(TimeDriver& driver, Clock& clock, const WifiConnection& connection,
-                         Events& events, Logger& log)
-    : driver_(driver), clock_(clock), connection_(connection), events_(events), log_(log),
-      servers_(std::begin(kDefaultServers), std::end(kDefaultServers))
+                         Settings& settings, Events& events, Logger& log)
+    : driver_(driver), clock_(clock), connection_(connection), settings_(settings), events_(events),
+      log_(log), servers_(std::begin(kDefaultServers), std::end(kDefaultServers))
 {
 }
 
@@ -133,10 +133,142 @@ bool NetworkTime::setTimezone(const std::string& posix)
         return false;
     }
     timezone_ = posix;
-    timezoneSet_ = true;
-    driver_.setTimezone(timezone_);
-    log_.debug("time", "time zone %s", timezone_.c_str());
+    // The Owner's zone, if there is one, stays in force.
+    if (!ownerZone())
+    {
+        applyTimezone();
+    }
     return true;
+}
+
+std::string NetworkTime::timezone() const
+{
+    return ownerZone() ? posixSetting_->value() : timezone_;
+}
+
+void NetworkTime::applyTimezone()
+{
+    const std::string posix = timezone();
+    driver_.setTimezone(posix);
+    log_.debug("time", "time zone %s", posix.c_str());
+}
+
+bool NetworkTime::ownerZone() const
+{
+    return posixSetting_ != nullptr && !posixSetting_->value().empty();
+}
+
+std::string NetworkTime::zone() const
+{
+    return ownerZone() ? zoneSetting_->value() : std::string();
+}
+
+bool NetworkTime::dst() const
+{
+    return ownerZone() ? dstSetting_->value() : true;
+}
+
+NetworkTime& NetworkTime::ownerCanEdit()
+{
+    if (zoneSetting_ != nullptr)
+    {
+        return *this;
+    }
+    SettingsSection& section = settings_.section(kSectionTitle);
+    zoneSetting_ = &section.addText(kZoneKey, "Time zone").maxLength(kMaxNameLength);
+    dstSetting_ = &section.addCheckbox(kDstKey, "Daylight saving time", true);
+    posixSetting_ = &section.addText(kPosixKey, "POSIX time zone")
+                         .maxLength(kMaxNameLength)
+                         .validate(
+                             [](const std::string& value)
+                             {
+                                 return value.empty() || printable(value, kMaxNameLength, ' ')
+                                            ? std::string()
+                                            : std::string("Not a time zone.");
+                             });
+    if (editableInManagement_)
+    {
+        editableInManagement_ = false;
+        editableInManagement();
+    }
+    return *this;
+}
+
+NetworkTime& NetworkTime::ownerCanEditServers()
+{
+    ownerCanEdit();
+    if (serverSetting_ != nullptr)
+    {
+        return *this;
+    }
+    const auto serverName = [](const std::string& value)
+    {
+        return value.empty() || printable(value, kMaxNameLength, '!')
+                   ? std::string()
+                   : std::string("Use a host name or IP address without spaces.");
+    };
+    SettingsSection& section = settings_.section(kSectionTitle);
+    serverSetting_ =
+        &section.addText(kServerKey, "NTP server").maxLength(kMaxNameLength).validate(serverName);
+    fallbackSetting_ = &section.addText(kFallbackKey, "Fallback NTP server")
+                            .maxLength(kMaxNameLength)
+                            .validate(serverName);
+    if (editableInManagement_)
+    {
+        serverSetting_->editableInManagement();
+        fallbackSetting_->editableInManagement();
+    }
+    return *this;
+}
+
+NetworkTime& NetworkTime::editableInManagement()
+{
+    editableInManagement_ = true;
+    for (TextSetting* setting : {zoneSetting_, posixSetting_, serverSetting_, fallbackSetting_})
+    {
+        if (setting != nullptr)
+        {
+            setting->editableInManagement();
+        }
+    }
+    if (dstSetting_ != nullptr)
+    {
+        dstSetting_->editableInManagement();
+    }
+    return *this;
+}
+
+std::vector<std::string> NetworkTime::activeServers() const
+{
+    std::vector<std::string> servers = servers_;
+    if (serverSetting_ != nullptr && !serverSetting_->value().empty())
+    {
+        servers[0] = serverSetting_->value();
+    }
+    if (fallbackSetting_ != nullptr && !fallbackSetting_->value().empty())
+    {
+        if (servers.size() >= 2)
+        {
+            servers[1] = fallbackSetting_->value();
+        }
+        else
+        {
+            servers.push_back(fallbackSetting_->value());
+        }
+    }
+    return servers;
+}
+
+void NetworkTime::settingChanged(const Setting& setting)
+{
+    if (&setting == posixSetting_)
+    {
+        applyTimezone();
+    }
+    else if ((&setting == serverSetting_ || &setting == fallbackSetting_) && started_)
+    {
+        startDriver();
+    }
 }
 
 bool NetworkTime::setSyncInterval(uint32_t ms)
@@ -155,22 +287,23 @@ bool NetworkTime::setSyncInterval(uint32_t ms)
     return true;
 }
 
-void NetworkTime::sync()
+bool NetworkTime::sync()
 {
     if (!enabled_)
     {
         log_.debug("time", "not syncing: Network Time is off");
-        return;
+        return false;
     }
     if (!started_ || connection_.state() != ConnectionState::Connected)
     {
         log_.debug("time", "syncing when the station connects");
-        return;
+        return false;
     }
     log_.debug("time", "syncing now");
     driver_.restart();
     watching_ = true;
     answerDueMs_ = clock_.nowMs() + kAnswerTimeoutMs;
+    return true;
 }
 
 int64_t NetworkTime::now() const
@@ -191,16 +324,22 @@ std::string NetworkTime::server() const
 void NetworkTime::begin()
 {
     begun_ = true;
+    // The Owner's zone has just been loaded with the Settings.
+    if (ownerZone())
+    {
+        applyTimezone();
+    }
 }
 
 void NetworkTime::startDriver()
 {
-    driver_.start(servers_, intervalMs_, useDhcp_);
+    const std::vector<std::string> servers = activeServers();
+    driver_.start(servers, intervalMs_, useDhcp_);
     started_ = true;
     watching_ = true;
     answerDueMs_ = clock_.nowMs() + kAnswerTimeoutMs;
     std::string names;
-    for (const std::string& name : servers_)
+    for (const std::string& name : servers)
     {
         names += names.empty() ? name : ", " + name;
     }

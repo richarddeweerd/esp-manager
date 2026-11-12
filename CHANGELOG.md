@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Network Time (#41): `esp.ntp()` syncs the clock from NTP servers once the station is connected. Off until `enable()`; three servers (`pool.ntp.org`, `time.google.com`, `time.cloudflare.com` by default, `setServer()`, `addFallbackServer()`, `useDhcpServer()`), a POSIX time zone (`setTimezone()`, `UTC0` by default, applied at once), `setSyncInterval()` (1 hour by default), `sync()`, `synchronised()` and `lastSync()`. `esp.onTimeSynced()` and `esp.onTimeSyncFailed()` (no answer within 30 s); `esp.status().time` and `GET /api/status` report it. It never blocks `process()` and never touches the Wi-Fi connection.
+- The Owner's time zone (#42): `esp.ntp().ownerCanEdit()` adds a "Time" Section to the Settings, with a list of named zones (the phone's own preselected) and a *Daylight saving time* checkbox for zones that have it; `ownerCanEditServers()` adds two NTP server fields, and `editableInManagement()` shows the Section in the Management Interface. The Owner's zone overrides `setTimezone()` until a Settings Reset.
+- The Management Interface's Status tab shows a *Time* group with *Synchronise now* (`POST /api/time/sync`) while Network Time is on, and "Recent events" in local time once the clock is synchronised.
 
 ## [0.4.0] - 2026-11-12
 

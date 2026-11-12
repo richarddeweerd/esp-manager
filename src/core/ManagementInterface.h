@@ -47,6 +47,8 @@ public:
         std::function<void()> networkReset;
         std::function<void()> factoryReset;
         std::function<bool()> settingsReset;
+        // Starts a Network Time sync; false if Network Time is off.
+        std::function<bool()> syncTime;
     };
 
     // How long an action waits after its answer.

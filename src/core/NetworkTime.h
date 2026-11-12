@@ -3,6 +3,7 @@
 #include "core/Clock.h"
 #include "core/Events.h"
 #include "core/Logger.h"
+#include "core/Settings.h"
 #include "core/TimeDriver.h"
 #include "core/WifiConnection.h"
 
@@ -31,8 +32,17 @@ public:
     // An attempt without an answer for this long counts as failed.
     static constexpr uint32_t kAnswerTimeoutMs = 30000;
 
-    NetworkTime(TimeDriver& driver, Clock& clock, const WifiConnection& connection, Events& events,
-                Logger& log);
+    // The keys of the Time Section's Settings; a sketch can't declare Settings with these.
+    static constexpr const char* kZoneKey = "time-zone";
+    static constexpr const char* kDstKey = "time-dst";
+    static constexpr const char* kPosixKey = "time-posix";
+    static constexpr const char* kServerKey = "time-server";
+    static constexpr const char* kFallbackKey = "time-fallback";
+    // The Section's title.
+    static constexpr const char* kSectionTitle = "Time";
+
+    NetworkTime(TimeDriver& driver, Clock& clock, const WifiConnection& connection,
+                Settings& settings, Events& events, Logger& log);
 
     NetworkTime(const NetworkTime&) = delete;
     NetworkTime& operator=(const NetworkTime&) = delete;
@@ -68,11 +78,25 @@ public:
     // off. 1 to 64 printable characters; a refused one changes nothing, is logged at Error and
     // returns false. The string isn't checked further: one the C library can't read gives UTC.
     bool setTimezone(const std::string& posix);
-    // The POSIX string in use.
-    const std::string& timezone() const
-    {
-        return timezone_;
-    }
+    // The POSIX string in use: the Owner's, or else the Developer's.
+    std::string timezone() const;
+
+    // Lets the Owner pick the time zone in the web pages: a "Time" Section of Settings with a list
+    // of named zones (the phone's own preselected) and a "Daylight saving time" checkbox for zones
+    // that have it. Call it before begin(), like any Setting. The Owner's zone overrides
+    // setTimezone(); a Settings Reset goes back to it. The Section shows in the Provisioning
+    // Portal, and in the Management Interface after editableInManagement().
+    NetworkTime& ownerCanEdit();
+    // Also lets the Owner change the first two time servers; an empty field keeps the
+    // Developer's. Implies ownerCanEdit().
+    NetworkTime& ownerCanEditServers();
+    // Makes the Time Section editable in the Management Interface too.
+    NetworkTime& editableInManagement();
+
+    // The Owner's named zone, such as "Europe/Amsterdam", and whether it keeps daylight saving
+    // time; empty and true while the Owner hasn't picked one.
+    std::string zone() const;
+    bool dst() const;
 
     // How often to sync again: 1 hour by default, at least 15 s; returns false, changing
     // nothing, below that.
@@ -82,8 +106,9 @@ public:
         return intervalMs_;
     }
 
-    // Starts a sync now, if enabled and connected; otherwise the next connection starts one.
-    void sync();
+    // Starts a sync now, if enabled and connected, and returns true; otherwise the next
+    // connection starts one, and it returns false.
+    bool sync();
 
     // True from the first successful sync since start-up: the clock has real time.
     bool synchronised() const
@@ -105,14 +130,21 @@ public:
     // Used by EspManager.
     void begin();
     void process();
+    // Applies a change to one of the Time Section's Settings.
+    void settingChanged(const Setting& setting);
 
 private:
     bool validName(const std::string& name, const char* what) const;
     void startDriver();
+    // The servers in use: the Developer's, with the Owner's in the first two places.
+    std::vector<std::string> activeServers() const;
+    bool ownerZone() const;
+    void applyTimezone();
 
     TimeDriver& driver_;
     Clock& clock_;
     const WifiConnection& connection_;
+    Settings& settings_;
     Events& events_;
     Logger& log_;
 
@@ -120,8 +152,15 @@ private:
     bool defaultFallbacks_ = true;
     bool useDhcp_ = false;
     std::string timezone_ = kDefaultTimezone;
-    bool timezoneSet_ = false;
     uint32_t intervalMs_ = kDefaultSyncIntervalMs;
+
+    // The Time Section's Settings, once declared.
+    TextSetting* zoneSetting_ = nullptr;
+    CheckboxSetting* dstSetting_ = nullptr;
+    TextSetting* posixSetting_ = nullptr;
+    TextSetting* serverSetting_ = nullptr;
+    TextSetting* fallbackSetting_ = nullptr;
+    bool editableInManagement_ = false;
 
     bool enabled_ = false;
     bool begun_ = false;
