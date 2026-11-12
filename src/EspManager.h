@@ -9,6 +9,7 @@
 #include "core/Logger.h"
 #include "core/ManagementInterface.h"
 #include "core/NetworkScanner.h"
+#include "core/NetworkTime.h"
 #include "core/Platform.h"
 #include "core/ProvisioningPortal.h"
 #include "core/SavedNetworkStore.h"
@@ -149,6 +150,11 @@ public:
     // May be called at any time.
     Branding& ui();
 
+    // Network Time (EP18), off by default: `esp.ntp().enable();` syncs the clock from NTP servers
+    // once the station is connected, and `esp.ntp().setTimezone("CET-1CEST,M3.5.0,M10.5.0/3");`
+    // sets local time. Then the C library's time() and localtime_r() give the real time.
+    NetworkTime& ntp();
+
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();
@@ -180,6 +186,11 @@ public:
     // A Setting has a new value, from a web page, the sketch or a Settings Reset. Called once per
     // Setting that changed; not when values load at begin(), or when a value is saved unchanged.
     EspManager& onSettingChanged(std::function<void(const Setting&)> listener);
+    // Network Time synchronised the clock; `first` is set for the first time since start-up
+    // (US18.7.1, US18.7.3).
+    EspManager& onTimeSynced(std::function<void(const TimeSyncInfo&)> listener);
+    // Network Time got no answer from its servers within 30 s (US18.7.2). It keeps trying.
+    EspManager& onTimeSyncFailed(std::function<void()> listener);
 
 private:
     friend struct EspManagerTestAccess;
@@ -204,6 +215,7 @@ private:
     SavedNetworks networks_{store_, log_};
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
+    NetworkTime time_{platform_.time, platform_.clock, connection_, events_, log_};
     WebRoutes routes_{platform_.wifi, platform_.http};
     SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
     SettingsApi settingsApi_{routes_, settings_, log_};

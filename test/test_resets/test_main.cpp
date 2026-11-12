@@ -200,8 +200,8 @@ void test_failed_erase_is_reported_and_still_restarts()
     // Swap the data into storage that can't be erased.
     FailingStorage failing;
     failing.data = d.fakes.storage.data;
-    espmgr::Platform platform{d.fakes.wifi, failing,     d.fakes.clock,
-                              d.fakes.http, d.fakes.log, d.fakes.system};
+    espmgr::Platform platform{d.fakes.wifi, failing,        d.fakes.clock, d.fakes.http,
+                              d.fakes.log,  d.fakes.system, d.fakes.time};
     EspManager esp{platform};
     esp.begin();
     TEST_ASSERT_FALSE(esp.factoryReset());

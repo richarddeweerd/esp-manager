@@ -46,6 +46,16 @@ void Events::raiseSettingChanged(const Setting& setting)
     pending_.push_back([this, &setting] { settingChanged.call(setting); });
 }
 
+void Events::raiseTimeSynced(TimeSyncInfo info)
+{
+    pending_.push_back([this, info] { timeSynced.call(info); });
+}
+
+void Events::raiseTimeSyncFailed()
+{
+    pending_.push_back([this] { timeSyncFailed.call(); });
+}
+
 void Events::deliver()
 {
     if (delivering_)

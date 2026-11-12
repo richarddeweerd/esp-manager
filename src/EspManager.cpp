@@ -34,6 +34,7 @@ void EspManager::begin()
     begun_ = true;
     history_.begin();
     connection_.begin();
+    time_.begin();
     portal_.begin();
     management_.begin();
 }
@@ -53,6 +54,7 @@ void EspManager::process()
     // the others see a scan that has just finished.
     scanner_.process();
     connection_.process();
+    time_.process();
     routes_.handle();
     portal_.process();
     management_.process();
@@ -115,6 +117,16 @@ DeviceStatus EspManager::status() const
     status.chip = platform_.system.chipModel();
     status.firmwareVersion = firmwareVersion_;
     status.libraryVersion = ESPMGR_VERSION;
+    status.time.enabled = time_.enabled();
+    status.time.synchronised = time_.synchronised();
+    if (time_.synchronised())
+    {
+        status.time.epoch = time_.now();
+        status.time.localTime = time_.localTime();
+        status.time.server = time_.server();
+    }
+    status.time.posix = time_.timezone();
+    status.time.lastSync = time_.lastSync();
     return status;
 }
 
@@ -264,6 +276,11 @@ Branding& EspManager::ui()
     return branding_;
 }
 
+NetworkTime& EspManager::ntp()
+{
+    return time_;
+}
+
 SavedNetworks& EspManager::networks()
 {
     return networks_;
@@ -323,6 +340,18 @@ EspManager::onProvisioningCompleted(std::function<void(const std::string& ssid)>
 EspManager& EspManager::onSettingChanged(std::function<void(const Setting&)> listener)
 {
     events_.settingChanged.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onTimeSynced(std::function<void(const TimeSyncInfo&)> listener)
+{
+    events_.timeSynced.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onTimeSyncFailed(std::function<void()> listener)
+{
+    events_.timeSyncFailed.add(std::move(listener));
     return *this;
 }
 

@@ -112,7 +112,9 @@ void test_status_json_has_every_field()
         R"("gateway":"192.168.1.1","dns":"192.168.1.53","rssi":-55,"channel":11,)"
         R"("hostname":"esp-abcdef","mac":"24:6f:28:ab:cd:ef","uptimeMs":5000,)"
         R"("resetReason":"power-on","freeHeap":180000,)"
-        R"("chip":"ESP32-C3 rev 4","firmware":"1.4.2","library":")" ESPMGR_VERSION R"("})";
+        R"("chip":"ESP32-C3 rev 4","firmware":"1.4.2","library":")" ESPMGR_VERSION R"(",)"
+        R"("time":{"enabled":false,"synchronised":false,"epoch":0,"localTime":"","zone":"",)"
+        R"("dst":true,"posix":"UTC0","lastSync":0,"server":""}})";
     TEST_ASSERT_EQUAL_STRING(expected.c_str(), json.str().c_str());
 }
 

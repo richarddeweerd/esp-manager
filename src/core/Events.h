@@ -39,6 +39,15 @@ struct ConnectedInfo
     uint8_t channel = 0;
 };
 
+// Passed to onTimeSynced listeners.
+struct TimeSyncInfo
+{
+    // Seconds since 1970-01-01 UTC, as set by the sync.
+    int64_t epoch = 0;
+    // The first successful sync since start-up: the clock has real time from now on.
+    bool first = false;
+};
+
 // Listeners for one event. Listeners added while the event is being delivered get the next
 // one, not this one. They can't be removed; they live as long as the EspManager.
 template <typename... Args> class Listeners
@@ -99,6 +108,8 @@ public:
     Listeners<> portalStopped;
     Listeners<const std::string&> provisioningCompleted;
     Listeners<const Setting&> settingChanged;
+    Listeners<const TimeSyncInfo&> timeSynced;
+    Listeners<> timeSyncFailed;
 
     void raiseConnected(ConnectedInfo info);
     void raiseDisconnected(FailureReason reason);
@@ -109,6 +120,8 @@ public:
     void raiseProvisioningCompleted(std::string ssid);
     // `setting` must outlive the delivery; Settings live as long as the EspManager.
     void raiseSettingChanged(const Setting& setting);
+    void raiseTimeSynced(TimeSyncInfo info);
+    void raiseTimeSyncFailed();
 
     // Calls the listeners of every queued event in the order raised, including events the
     // listeners raise meanwhile. Does nothing when called from inside a listener.
