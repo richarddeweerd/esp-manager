@@ -4,6 +4,7 @@
 #include "platform/esp32/Esp32Clock.h"
 #include "platform/esp32/Esp32HttpServer.h"
 #include "platform/esp32/Esp32System.h"
+#include "platform/esp32/Esp32TimeDriver.h"
 #include "platform/esp32/Esp32WifiDriver.h"
 #include "platform/esp32/NvsStorage.h"
 #include "platform/esp32/SerialLogSink.h"
@@ -32,7 +33,8 @@ private:
     Esp32HttpServer http_;
     SerialLogSink log_;
     Esp32System system_;
-    Platform platform_{wifi_, storage_, clock_, http_, log_, system_};
+    Esp32TimeDriver time_;
+    Platform platform_{wifi_, storage_, clock_, http_, log_, system_, time_};
 };
 
 }  // namespace espmgr

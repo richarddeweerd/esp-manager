@@ -11,6 +11,26 @@
 namespace espmgr
 {
 
+// Network Time's part of the status (EP18).
+struct TimeStatus
+{
+    bool enabled = false;
+    bool synchronised = false;
+    // Seconds since 1970-01-01 UTC now, and the local time as "2026-11-12T13:53:47+01:00"; 0 and
+    // empty until synchronised.
+    int64_t epoch = 0;
+    std::string localTime;
+    // The Owner's named zone ("Europe/Amsterdam") and daylight saving choice, when one was
+    // picked; the POSIX string is the one in use either way.
+    std::string zone;
+    bool dst = true;
+    std::string posix;
+    // Seconds since 1970-01-01 UTC of the last successful sync; 0 before the first.
+    int64_t lastSync = 0;
+    // The server that answered; empty before the first answer.
+    std::string server;
+};
+
 // Where the device stands, for the status pages and for sketches (esp.status()). It never holds
 // a password.
 struct DeviceStatus
@@ -38,6 +58,7 @@ struct DeviceStatus
     // Set by the Developer with esp.setFirmwareVersion(); empty if not.
     std::string firmwareVersion;
     std::string libraryVersion;
+    TimeStatus time;
 };
 
 // "Idle", "Connecting", "Connected" or "Waiting".

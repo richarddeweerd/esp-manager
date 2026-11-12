@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Network Time (#41): `esp.ntp()` syncs the clock from NTP servers once the station is connected. Off until `enable()`; three servers (`pool.ntp.org`, `time.google.com`, `time.cloudflare.com` by default, `setServer()`, `addFallbackServer()`, `useDhcpServer()`), a POSIX time zone (`setTimezone()`, `UTC0` by default, applied at once), `setSyncInterval()` (1 hour by default), `sync()`, `synchronised()` and `lastSync()`. `esp.onTimeSynced()` and `esp.onTimeSyncFailed()` (no answer within 30 s); `esp.status().time` and `GET /api/status` report it. It never blocks `process()` and never touches the Wi-Fi connection.
+
 ## [0.4.0] - 2026-11-12
 
 A new example for the device's name and the Provisioning Portal's password.
