@@ -33,6 +33,8 @@ const S = {
   settingsLoaded: false,
   settingsError: "",
   settingsNote: "",
+  // Synchronise now: "", "busy", "started" or "failed".
+  syncState: "",
 };
 
 // What the Device tab can do: [request, strings key, whether it erases something].
@@ -84,6 +86,17 @@ async function runAction(key) {
 }
 
 const typing = () => S.netSheet || S.tab === "settings";
+
+async function syncNow() {
+  S.syncState = "busy";
+  render();
+  try {
+    S.syncState = (await postForm("/api/time/sync", {})).ok ? "started" : "failed";
+  } catch (error) {
+    S.syncState = "failed";
+  }
+  render();
+}
 
 async function loadSettings() {
   try {
@@ -214,16 +227,51 @@ function eventText(event) {
   return text.replace("{ssid}", event.ssid || "").replace("{reason}", reason || "");
 }
 
+// A moment as the device's local time, in the Owner's zone when there is one, else the phone's.
+function formatMoment(epochMs, withDate) {
+  const time = S.status && S.status.time;
+  const options = withDate ? { dateStyle: "medium", timeStyle: "short" } : { timeStyle: "short" };
+  try {
+    if (time && time.zone && time.dst) options.timeZone = time.zone;
+    return new Date(epochMs).toLocaleString(undefined, options);
+  } catch (error) {
+    return new Date(epochMs).toLocaleString();
+  }
+}
+
 function historyRows() {
   const h = S.history;
   if (!h) return `<div class="row muted">${esc(STRINGS.loading)}</div>`;
   if (!h.events.length) return `<div class="row muted">${esc(STRINGS.noEvents)}</div>`;
+  // Once the clock is synchronised, events show when they happened instead of how long ago.
+  const time = S.status && S.status.time;
+  const clock = time && time.synchronised ? time.epoch * 1000 - h.uptimeMs : null;
   return h.events.slice().reverse().map((event) => {
     const bad = event.kind === "connect-failed" || (event.kind === "disconnected" && event.reason !== "none");
     const signal = event.kind === "connected" ? `&nbsp;${bars(event.rssi)}` : "";
+    const when = clock === null ? formatAgo(h.uptimeMs - event.uptimeMs)
+      : formatMoment(clock + event.uptimeMs, h.uptimeMs - event.uptimeMs > 86400000);
     return `<div class="row${bad ? " bad" : ""}"><span class="name">${esc(eventText(event))}${signal}</span>
-      <span class="muted">${esc(formatAgo(h.uptimeMs - event.uptimeMs))}</span></div>`;
+      <span class="muted">${esc(when)}</span></div>`;
   }).join("");
+}
+
+// The Time group: Network Time's state, and Synchronise now.
+function timeRows(t) {
+  const local = t.localTime ? t.localTime.replace("T", " ").replace(/([+-]\d{2}:\d{2}|Z)$/, " (UTC$1)") : "–";
+  const zone = t.zone ? (t.dst ? zoneLabel(t.zone) : STRINGS.noDst.replace("{zone}", zoneLabel(t.zone))) : t.posix;
+  const rows = [
+    [STRINGS.synchronised, t.synchronised ? STRINGS.yes : STRINGS.no],
+    [STRINGS.localTime, local],
+    [STRINGS.timeZone, zone],
+    [STRINGS.lastSync, t.lastSync && t.synchronised ? formatAgo((t.epoch - t.lastSync) * 1000) : "–"],
+    [STRINGS.timeServer, t.server || "–"],
+  ];
+  const note = S.syncState === "started" ? `<p class="muted hint">${esc(STRINGS.syncStarted)}</p>`
+    : S.syncState === "failed" ? `<p class="error">${esc(STRINGS.syncFailed)}</p>` : "";
+  return `<div class="rows"><dl class="kv">${rows.map(([label, value]) =>
+    `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join("")}</dl></div>
+    <button class="btn secondary block" data-sync ${S.syncState === "busy" ? "disabled" : ""}>${esc(STRINGS.syncNow)}</button>${note}`;
 }
 
 const tabs = {
@@ -263,6 +311,7 @@ const tabs = {
       ${tile(STRINGS.ipAddress, connected ? s.ip : "–")}
       ${tile(STRINGS.uptime, formatUptime(s.uptimeMs))}</div>
       <h3>${esc(STRINGS.recentEvents)}</h3><div class="rows">${historyRows()}</div>
+      ${s.time && s.time.enabled ? `<h3>${esc(STRINGS.time)}</h3>${timeRows(s.time)}` : ""}
       <h3>${esc(STRINGS.details)}</h3><div class="rows">${statusList(s)}</div>`;
   },
 
@@ -403,6 +452,10 @@ app.addEventListener("click", (event) => {
   }
   if (event.target.closest("[data-save-settings]")) {
     saveSettings();
+    return;
+  }
+  if (event.target.closest("[data-sync]")) {
+    syncNow();
     return;
   }
   const move = event.target.closest("[data-move]");

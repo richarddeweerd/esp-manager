@@ -28,6 +28,8 @@ builds every sketch in `examples/` for one board. `scripts/check-format.sh` chec
 
 The web pages are written as plain HTML, CSS and JavaScript in `src/web/<page>/`, with all their text in `src/web/strings.en.json`. `scripts/build-web.py` turns each page into one gzipped file inside a generated header (`src/web/generated/`), which is committed, so building the library needs no extra tools. Run it after changing a page; `scripts/build-web.py --check` fails if a header is out of date. A link to an absolute path, such as `/custom.css`, isn't inlined: the device serves it.
 
+The Time Section's zone picker uses `src/web/common/zones.js`, the named zones of the tz database with their POSIX rules, written by `scripts/build-zones.py` from the computer's own zoneinfo (`/usr/share/zoneinfo` by default). Run it after a tz database update that changes a rule, then `scripts/build-web.py`, and commit both.
+
 The library's logic reaches the hardware only through small interfaces in `src/core/` (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink` and `System`). The ESP32 versions are in `src/platform/esp32/`; the unit tests use the fakes in `test/fakes/` instead, which is why they run without a board.
 
 ### On-device tests

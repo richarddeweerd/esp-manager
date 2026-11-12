@@ -215,7 +215,7 @@ private:
     SavedNetworks networks_{store_, log_};
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
-    NetworkTime time_{platform_.time, platform_.clock, connection_, events_, log_};
+    NetworkTime time_{platform_.time, platform_.clock, connection_, settings_, events_, log_};
     WebRoutes routes_{platform_.wifi, platform_.http};
     SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
     SettingsApi settingsApi_{routes_, settings_, log_};
@@ -231,8 +231,9 @@ private:
                                     log_,
                                     [this] { return hostname(); },
                                     [this] { return status(); },
-                                    {[this] { restart(); }, [this] { networkReset(); }, [this]
-                                     { factoryReset(); }, [this] { return settingsReset(); }}};
+                                    {[this] { restart(); }, [this] { networkReset(); },
+                                     [this] { factoryReset(); }, [this] { return settingsReset(); },
+                                     [this] { return time_.sync(); }}};
     ProvisioningPortal portal_{platform_.wifi,
                                routes_,
                                networksApi_,

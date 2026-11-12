@@ -21,6 +21,7 @@ EspManager::EspManager(std::shared_ptr<Esp32Platform> owned, Platform& platform)
     events_.connectFailed.add([this](const std::string& ssid, FailureReason reason)
                               { history_.recordConnectFailed(ssid, reason); });
     events_.disconnected.add([this](FailureReason reason) { history_.recordDisconnected(reason); });
+    events_.settingChanged.add([this](const Setting& setting) { time_.settingChanged(setting); });
 }
 
 void EspManager::begin()
@@ -125,6 +126,8 @@ DeviceStatus EspManager::status() const
         status.time.localTime = time_.localTime();
         status.time.server = time_.server();
     }
+    status.time.zone = time_.zone();
+    status.time.dst = time_.dst();
     status.time.posix = time_.timezone();
     status.time.lastSync = time_.lastSync();
     return status;
