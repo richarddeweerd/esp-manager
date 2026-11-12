@@ -1,6 +1,6 @@
 {
   "name": "EspManager",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Wi-Fi connection, captive-portal setup and device management for ESP32. Non-blocking: all work happens in process().",
   "keywords": ["wifi", "captive-portal", "provisioning", "esp32", "web-server"],
   "repository": {

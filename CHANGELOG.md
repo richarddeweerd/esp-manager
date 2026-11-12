@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-12
+
+A new example for the device's name and the Provisioning Portal's password.
+
 ### Added
 
 - `examples/DeviceName`: a name prefix for the device and a password for the Provisioning Portal.
@@ -51,7 +55,8 @@ The first release: connecting, setup from a phone and an optional management pag
 - Examples: `Basic`, and `Button`, which opens the Provisioning Portal on a short press of the BOOT button and starts a Network Reset or Factory Reset when it's held (#20).
 - Hardware interfaces (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`) with ESP32 implementations, fakes and host unit tests, plus on-device tests and the scripts to build and run them (#3, #28).
 
-[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/richarddeweerd/esp-manager/releases/tag/v0.1.0
