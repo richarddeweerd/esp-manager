@@ -7,7 +7,8 @@
 // against what the Wi-Fi library and the chip report (#16), and the Management Interface, which
 // the rig logs in to with Digest over the test network (#17), moving between two Saved Networks
 // while the rig switches its access point from one name to the other and back (#21), and a
-// Network Reset at the end (#19), so the test networks are forgotten afterwards.
+// Network Reset at the end (#19), so the test networks are forgotten afterwards. Network Time
+// syncs from the public NTP servers through the rig's NAT (#43).
 //
 // Run it with scripts/run-hw-tests.py, which sends the test network; see test/hw/HostLink.h.
 
@@ -21,6 +22,7 @@
 #include "../hw/HostLink.h"
 
 #include <algorithm>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,7 @@ EspManager esp;
 std::vector<std::string> events;
 ConnectedInfo connected;
 std::string portalSsid;
+std::vector<espmgr::TimeSyncInfo> timeSyncs;
 
 // Must match scripts/run-hw-tests.py. Set with setPassword(), since the rig can't use the
 // Provisioning Portal; a real device never has a password in its firmware.
@@ -219,6 +222,38 @@ wifi_auth_mode_t accessPointAuthMode()
     wifi_config_t config{};
     esp_wifi_get_config(WIFI_IF_AP, &config);
     return config.ap.authmode;
+}
+
+void test_network_time_syncs_through_the_rig()
+{
+    esp.ntp().setTimezone("CET-1CEST,M3.5.0,M10.5.0/3");
+    esp.ntp().enable();
+    const uint32_t start = millis();
+    while (!esp.ntp().synchronised() && millis() - start < 30000)
+    {
+        esp.process();
+        delay(10);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(esp.ntp().synchronised(), "no time sync within 30 s");
+    Serial.printf("synced in %lu ms with %s: %s\n", static_cast<unsigned long>(millis() - start),
+                  esp.ntp().server().c_str(), esp.ntp().localTime().c_str());
+    TEST_ASSERT_EQUAL_UINT(1, timeSyncs.size());
+    TEST_ASSERT_TRUE(timeSyncs[0].first);
+    // Later than 2026-01-01, and the C library's own clock agrees.
+    TEST_ASSERT_TRUE(esp.ntp().lastSync() > 1767225600);
+    const int64_t drift = static_cast<int64_t>(time(nullptr)) - esp.ntp().lastSync();
+    TEST_ASSERT_TRUE(drift >= 0 && drift <= 5);
+    // Amsterdam is one or two hours ahead of UTC, and localtime_r() knows it.
+    const std::string local = esp.status().time.localTime;
+    TEST_ASSERT_TRUE_MESSAGE(local.size() == 25 && (local.compare(19, 6, "+01:00") == 0 ||
+                                                    local.compare(19, 6, "+02:00") == 0),
+                             local.c_str());
+    const time_t now = time(nullptr);
+    struct tm parts;
+    localtime_r(&now, &parts);
+    TEST_ASSERT_TRUE(parts.tm_year + 1900 >= 2026);
+    TEST_ASSERT_TRUE(esp.ntp().sync());
+    esp.ntp().disable();
 }
 
 void test_portal_opens_next_to_the_connection_on_its_channel()
@@ -424,6 +459,7 @@ void setup()
                                  { events.push_back(std::string(name(from)) + ">" + name(to)); });
     esp.onConnected([](const ConnectedInfo& info) { connected = info; });
     esp.onPortalStarted([](const std::string& ssid) { portalSsid = ssid; });
+    esp.onTimeSynced([](const espmgr::TimeSyncInfo& info) { timeSyncs.push_back(info); });
     esp.onConnectFailed(
         [](const std::string&, FailureReason reason)
         { Serial.printf("connect failed, reason %d\n", static_cast<int>(reason)); });
@@ -437,6 +473,7 @@ void setup()
     RUN_TEST(test_static_ip_saved_network_gets_its_address);
     RUN_TEST(test_back_to_dhcp_gets_a_leased_address);
     RUN_TEST(test_status_matches_the_hardware);
+    RUN_TEST(test_network_time_syncs_through_the_rig);
     RUN_TEST(test_portal_opens_next_to_the_connection_on_its_channel);
     RUN_TEST(test_portal_refuses_requests_from_the_test_network);
     RUN_TEST(test_stop_portal_closes_the_access_point);

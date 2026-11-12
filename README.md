@@ -22,7 +22,7 @@ void loop()
 
 That's the whole [Basic example](examples/Basic). On a new board it opens a Wi-Fi access point with a setup page; once the Owner has picked a network there, the device joins it, and after every restart it reconnects by itself.
 
-Version `0.3.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
+Version `0.5.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
 
 - [What it does](#what-it-does)
 - [Terms](#terms)
@@ -43,9 +43,10 @@ Version `0.3.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHA
 - Events for connection and setup changes, always called from inside `process()`.
 - Diagnostics: the library's log lines in your own handler, a Connection History of recent connects, failures and drops, and why the device last started.
 - Your product's look on both web pages: a title, a logo, a light or dark theme and your own CSS.
+- Optional Network Time: the clock set from NTP servers, local time from a time zone you set or the Owner picks.
 - Everything happens in `process()`; nothing waits unless you ask for it.
 
-Planned for later versions: over-the-air updates and NTP time.
+Planned for later versions: over-the-air updates.
 
 ## Terms
 
@@ -59,6 +60,7 @@ The README uses a few words in a fixed sense:
 - **Setting**: a named value your firmware declares and the Owner fills in on the web pages, such as a server's name. Settings are grouped in **Sections**.
 - **Connection History**: the device's record of its recent connection events, kept in memory until it restarts.
 - **Branding**: your title, logo, theme and CSS for the web pages.
+- **Network Time**: the device's date and time, set from NTP servers once it's connected. Off unless you turn it on.
 
 ## Quick start
 
@@ -72,7 +74,7 @@ platform = https://github.com/pioarduino/platform-espressif32/releases/download/
 framework = arduino
 board = esp32dev
 monitor_speed = 115200
-lib_deps = richarddeweerd/EspManager@^0.4.0
+lib_deps = richarddeweerd/EspManager@^0.5.0
 ```
 
 Keep the `richarddeweerd/` part: the Registry also has two older ESP8266 libraries called ESPManager and espManager, which are something else.
@@ -428,6 +430,39 @@ for (const espmgr::ConnectionEvent& event : esp.connectionHistory().entries())  
 
 It keeps the last 20 events; `esp.connectionHistory().setCapacity(n)` before `begin()` changes that, from 0 (keep none) to 50, at about 50 bytes each. A network the Owner tests in the Provisioning Portal isn't recorded unless the device joins it. A restart clears the history, while the Network Reset and Settings Reset leave it; the [status](#status) says why the device last started. The Management Interface shows it on its Status tab as *Recent events*. The Provisioning Portal doesn't, since anyone in range can open it.
 
+### Network Time
+
+Network Time sets the device's clock from NTP servers. It's off by default; turn it on, give it a time zone, and once it has synchronised the C library's `time()`, `localtime_r()` and `strftime()` give the real local time:
+
+```cpp
+esp.ntp().enable();                                   // syncs once the station is connected
+esp.ntp().setTimezone("CET-1CEST,M3.5.0,M10.5.0/3");  // a POSIX TZ string; UTC by default
+
+if (esp.ntp().synchronised())
+{
+    const time_t now = time(nullptr);
+    struct tm local;
+    localtime_r(&now, &local);
+}
+```
+
+- **Syncing**: the first sync starts when the station connects, and every new connection starts one; then it syncs again every hour (`esp.ntp().setSyncInterval(ms)`, at least 15 s). `esp.ntp().sync()` starts one now. The platform's SNTP client does the work in the background, so `process()` never waits for it, and nothing it does affects Wi-Fi.
+- **Servers**: `pool.ntp.org`, `time.google.com` and `time.cloudflare.com`, tried in that order. `setServer()` replaces the first; `addFallbackServer()` adds one to try after it, the first call replacing the two defaults, up to three in all. `useDhcpServer(true)` lets a server your router hands out come first.
+- **Time zone**: a POSIX TZ string, such as `EST5EDT,M3.2.0,M11.1.0` for New York or `JST-9` for Tokyo; the time zone database's files end with the one for their zone. It applies at once, also with Network Time off, for a clock you set yourself. The library doesn't parse it: a string the C library can't read gives UTC.
+- **State**: `synchronised()` turns true at the first successful sync since start-up and stays true, since the clock keeps running; `lastSync()` is when the last one was, in seconds since 1970 (UTC), 0 before the first.
+- **Events**: `esp.onTimeSynced()` after each sync, with `info.first` set for the first one since start-up; `esp.onTimeSyncFailed()` when no server answers within 30 s. It keeps trying, and says so at most once an hour (once per interval).
+- **Status**: `esp.status().time` and the Management Interface's Status tab show whether it's synchronised, the local time, the time zone, the last sync and the server, with a *Synchronise now* button. Once synchronised, *Recent events* show the time they happened.
+
+The Owner can pick the time zone instead:
+
+```cpp
+esp.ntp().ownerCanEdit();          // before begin(), like a Setting
+esp.ntp().ownerCanEditServers();   // and the first two servers, optional
+esp.ntp().editableInManagement();  // also in the Management Interface
+```
+
+This adds a **Time** Section to the [Settings](#settings), with every named zone of the time zone database to choose from, the phone's own zone already selected, and a *Daylight saving time* checkbox for zones that have it. Unticked, the zone keeps its standard time all year. The Owner's choice overrides `setTimezone()`, until a Settings Reset brings yours back; `esp.ntp().zone()` and `dst()` say what they picked. The Section uses the keys `time-zone`, `time-dst`, `time-posix`, `time-server` and `time-fallback`, so don't declare Settings with those.
+
 ### Branding
 
 Both web pages can carry your product's look. Set it at any time; the pages read it each time they load:
@@ -462,6 +497,7 @@ The pages fetch these from `GET /api/ui`, `GET /custom.css` and `GET /logo`, whi
 - [Basic](examples/Basic): the smallest sketch, `begin()` and `process()`, with an optional wait for the connection.
 - [DeviceName](examples/DeviceName): the device's own name prefix, so each board is `lamp-` plus its MAC digits, and a WPA2 password for the Provisioning Portal's access point.
 - [Settings](examples/Settings): your own settings in two Sections, with validation, a password, some marked for the Management Interface, and `onSettingChanged`.
+- [NetworkTime](examples/NetworkTime): Network Time with the Owner's time zone, editable in both web pages, printing the local time every minute.
 - [Branding](examples/Branding): a title, an SVG logo, a fixed light theme and a teal accent in your own CSS, on both web pages.
 - [Diagnostics](examples/Diagnostics): a log handler printing the library's lines in its own format, and every minute the status, with why the device last started, and the Connection History.
 - [Button](examples/Button): the board's BOOT button opens the Provisioning Portal on a short press, starts a Network Reset when held for 5 seconds and a Factory Reset when held for 10, acting when it's let go. It's polled from `loop()` without `delay()`, and the serial monitor says what letting go will do. Build with `-D BUTTON_PIN=<n>` for another pin.
