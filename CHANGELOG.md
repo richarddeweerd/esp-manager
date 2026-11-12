@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-11-11
+## [0.4.0] - 2026-11-12
 
 A new example for the device's name and the Provisioning Portal's password.
 
