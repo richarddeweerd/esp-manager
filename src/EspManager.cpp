@@ -36,6 +36,7 @@ void EspManager::begin()
     history_.begin();
     connection_.begin();
     time_.begin();
+    updates_.begin();
     portal_.begin();
     management_.begin();
 }
@@ -56,6 +57,12 @@ void EspManager::process()
     scanner_.process();
     connection_.process();
     time_.process();
+    updates_.process();
+    if (portalAfterUpdate_ && !updates_.busy())
+    {
+        portalAfterUpdate_ = false;
+        portal_.start();
+    }
     routes_.handle();
     portal_.process();
     management_.process();
@@ -130,6 +137,13 @@ DeviceStatus EspManager::status() const
     status.time.dst = time_.dst();
     status.time.posix = time_.timezone();
     status.time.lastSync = time_.lastSync();
+    status.update.configured = updates_.configured();
+    status.update.state = updates_.state();
+    status.update.channel = updates_.channel();
+    status.update.available = updates_.available().version;
+    status.update.progress = updates_.progress();
+    status.update.pending = updates_.pending();
+    status.update.last = updates_.lastResult();
     return status;
 }
 
@@ -191,6 +205,13 @@ bool EspManager::setNamePrefix(const std::string& prefix)
 
 void EspManager::startPortal()
 {
+    if (updates_.busy())
+    {
+        // The portal's scan and channel change would break the download.
+        log_.info("core", "the Provisioning Portal opens once the update is done");
+        portalAfterUpdate_ = true;
+        return;
+    }
     portal_.start();
 }
 
@@ -284,6 +305,15 @@ NetworkTime& EspManager::ntp()
     return time_;
 }
 
+UpdateManager& EspManager::updates()
+{
+    if (!updates_.attached() && platform_.updates != nullptr)
+    {
+        updates_.attach(*platform_.updates);
+    }
+    return updates_;
+}
+
 SavedNetworks& EspManager::networks()
 {
     return networks_;
@@ -355,6 +385,36 @@ EspManager& EspManager::onTimeSynced(std::function<void(const TimeSyncInfo&)> li
 EspManager& EspManager::onTimeSyncFailed(std::function<void()> listener)
 {
     events_.timeSyncFailed.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateAvailable(std::function<void(const UpdateInfo&)> listener)
+{
+    events_.updateAvailable.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateStarted(std::function<void(const UpdateInfo&)> listener)
+{
+    events_.updateStarted.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateProgress(std::function<void(const UpdateProgress&)> listener)
+{
+    events_.updateProgress.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateCompleted(std::function<void(const UpdateInfo&)> listener)
+{
+    events_.updateCompleted.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateFailed(std::function<void(const UpdateError&)> listener)
+{
+    events_.updateFailed.add(std::move(listener));
     return *this;
 }
 

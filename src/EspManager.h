@@ -17,6 +17,7 @@
 #include "core/SavedNetworksApi.h"
 #include "core/Settings.h"
 #include "core/SettingsApi.h"
+#include "core/UpdateManager.h"
 #include "core/WebRoutes.h"
 #include "core/WifiConnection.h"
 
@@ -155,6 +156,13 @@ public:
     // sets local time. Then the C library's time() and localtime_r() give the real time.
     NetworkTime& ntp();
 
+    // Firmware updates (EP17) from the Developer's Update Server, for example
+    // `esp.updates().setServer("https://updates.example.com/thermostat/");` with
+    // `esp.updates().setPublicKey(kPublicKey);`, then `esp.updates().setAutoCheck(true);` or
+    // `esp.updates().check();`. Set it up before begin(). Sketches that never call this don't
+    // carry the HTTPS and update code.
+    UpdateManager& updates();
+
     // The Saved Networks, for example `esp.networks().save("Home", "password");`. A network
     // saved while Idle is connected to on the next process().
     SavedNetworks& networks();
@@ -191,6 +199,16 @@ public:
     EspManager& onTimeSynced(std::function<void(const TimeSyncInfo&)> listener);
     // Network Time got no answer from its servers within 30 s (US18.7.2). It keeps trying.
     EspManager& onTimeSyncFailed(std::function<void()> listener);
+    // A check found a newer version; raised once per version (US17.10.1).
+    EspManager& onUpdateAvailable(std::function<void(const UpdateInfo&)> listener);
+    // A download started (US17.10.2).
+    EspManager& onUpdateStarted(std::function<void(const UpdateInfo&)> listener);
+    // Download progress, per whole percent, at most every 250 ms (US17.10.3).
+    EspManager& onUpdateProgress(std::function<void(const UpdateProgress&)> listener);
+    // The new firmware is installed; the device restarts in 2 s unless told not to (US17.10.4).
+    EspManager& onUpdateCompleted(std::function<void(const UpdateInfo&)> listener);
+    // A check or install failed, or new firmware was rolled back (US17.10.5).
+    EspManager& onUpdateFailed(std::function<void(const UpdateError&)> listener);
 
 private:
     friend struct EspManagerTestAccess;
@@ -216,6 +234,16 @@ private:
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
     NetworkTime time_{platform_.time, platform_.clock, connection_, settings_, events_, log_};
+    UpdateManager updates_{platform_.clock,
+                           platform_.system,
+                           platform_.storage,
+                           connection_,
+                           events_,
+                           log_,
+                           {[this] { return firmwareVersion_; },
+                            [this] { return portal_.state() == PortalState::Active; },
+                            [this] { return time_.synchronised() ? time_.now() : 0; },
+                            [this] { restart(); }}};
     WebRoutes routes_{platform_.wifi, platform_.http};
     SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
     SettingsApi settingsApi_{routes_, settings_, log_};
@@ -254,6 +282,8 @@ private:
     std::string firmwareVersion_;
     bool begun_ = false;
     bool restartPending_ = false;
+    // startPortal() was called during an update; it opens once the update is done.
+    bool portalAfterUpdate_ = false;
     uint64_t restartAtMs_ = 0;
 };
 

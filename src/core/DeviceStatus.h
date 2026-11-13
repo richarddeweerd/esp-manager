@@ -4,6 +4,7 @@
 #include "core/Ipv4Address.h"
 #include "core/JsonWriter.h"
 #include "core/System.h"
+#include "core/UpdateTypes.h"
 
 #include <cstdint>
 #include <string>
@@ -29,6 +30,23 @@ struct TimeStatus
     int64_t lastSync = 0;
     // The server that answered; empty before the first answer.
     std::string server;
+};
+
+// The firmware updates part of the status (EP17).
+struct UpdateStatus
+{
+    // A server is set, so updates can work.
+    bool configured = false;
+    UpdateState state = UpdateState::Idle;
+    std::string channel;
+    // The version the last check found; empty if none.
+    std::string available;
+    // 0 to 100 while downloading.
+    uint8_t progress = 0;
+    // The running firmware is new and not confirmed yet.
+    bool pending = false;
+    // The most recent install attempt.
+    UpdateRecord last;
 };
 
 // Where the device stands, for the status pages and for sketches (esp.status()). It never holds
@@ -59,6 +77,7 @@ struct DeviceStatus
     std::string firmwareVersion;
     std::string libraryVersion;
     TimeStatus time;
+    UpdateStatus update;
 };
 
 // "Idle", "Connecting", "Connected" or "Waiting".

@@ -56,6 +56,31 @@ void Events::raiseTimeSyncFailed()
     pending_.push_back([this] { timeSyncFailed.call(); });
 }
 
+void Events::raiseUpdateAvailable(UpdateInfo info)
+{
+    pending_.push_back([this, info = std::move(info)] { updateAvailable.call(info); });
+}
+
+void Events::raiseUpdateStarted(UpdateInfo info)
+{
+    pending_.push_back([this, info = std::move(info)] { updateStarted.call(info); });
+}
+
+void Events::raiseUpdateProgress(UpdateProgress progress)
+{
+    pending_.push_back([this, progress] { updateProgress.call(progress); });
+}
+
+void Events::raiseUpdateCompleted(UpdateInfo info)
+{
+    pending_.push_back([this, info = std::move(info)] { updateCompleted.call(info); });
+}
+
+void Events::raiseUpdateFailed(UpdateError error)
+{
+    pending_.push_back([this, error = std::move(error)] { updateFailed.call(error); });
+}
+
 void Events::deliver()
 {
     if (delivering_)

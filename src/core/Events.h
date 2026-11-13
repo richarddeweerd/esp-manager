@@ -2,6 +2,7 @@
 
 #include "core/Ipv4Address.h"
 #include "core/Logger.h"
+#include "core/UpdateTypes.h"
 #include "core/WifiDriver.h"
 
 #include <cstddef>
@@ -110,6 +111,11 @@ public:
     Listeners<const Setting&> settingChanged;
     Listeners<const TimeSyncInfo&> timeSynced;
     Listeners<> timeSyncFailed;
+    Listeners<const UpdateInfo&> updateAvailable;
+    Listeners<const UpdateInfo&> updateStarted;
+    Listeners<const UpdateProgress&> updateProgress;
+    Listeners<const UpdateInfo&> updateCompleted;
+    Listeners<const UpdateError&> updateFailed;
 
     void raiseConnected(ConnectedInfo info);
     void raiseDisconnected(FailureReason reason);
@@ -122,6 +128,11 @@ public:
     void raiseSettingChanged(const Setting& setting);
     void raiseTimeSynced(TimeSyncInfo info);
     void raiseTimeSyncFailed();
+    void raiseUpdateAvailable(UpdateInfo info);
+    void raiseUpdateStarted(UpdateInfo info);
+    void raiseUpdateProgress(UpdateProgress progress);
+    void raiseUpdateCompleted(UpdateInfo info);
+    void raiseUpdateFailed(UpdateError error);
 
     // Calls the listeners of every queued event in the order raised, including events the
     // listeners raise meanwhile. Does nothing when called from inside a listener.
