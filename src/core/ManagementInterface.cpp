@@ -228,6 +228,25 @@ void ManagementInterface::registerRoutes()
                    routes_.http().send(started ? 200 : 409, "application/json",
                                        started ? "{\"ok\":true}" : "{\"error\":\"time-off\"}");
                });
+    for (const ExtraRoute& route : extraRoutes_)
+    {
+        routes_.on(Site::Management, route.method, route.path,
+                   [this, route](const HttpRequest& request)
+                   {
+                       const bool allowed =
+                           route.action ? allowAction(request, route.name) : authorize(request);
+                       if (allowed)
+                       {
+                           route.handler(request, routes_.http());
+                       }
+                   });
+    }
+}
+
+void ManagementInterface::addRoute(HttpMethod method, const std::string& path, bool action,
+                                   const char* name, RouteHandler handler)
+{
+    extraRoutes_.push_back({method, path, action, name, std::move(handler)});
 }
 
 void ManagementInterface::registerAction(const char* path, const char* name,

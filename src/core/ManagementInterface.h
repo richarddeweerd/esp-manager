@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace espmgr
 {
@@ -107,6 +108,15 @@ public:
     // 8 to 63 printable ASCII characters.
     static bool isValidPassword(const std::string& password);
 
+    // --- For other parts ---
+
+    using RouteHandler = std::function<void(const HttpRequest&, HttpServer&)>;
+    // Adds a route behind the password, for a part that only exists in some sketches (firmware
+    // updates). With `action`, a request must also carry `X-Requested-With: EspManager`, like
+    // the Device tab's buttons. Call it before begin(). `name` is for the log.
+    void addRoute(HttpMethod method, const std::string& path, bool action, const char* name,
+                  RouteHandler handler);
+
     // --- Driven by EspManager ---
 
     void begin();
@@ -129,6 +139,16 @@ private:
     void registerAction(const char* path, const char* name,
                         std::function<void()> Actions::* action);
     std::string storedId() const;
+
+    struct ExtraRoute
+    {
+        HttpMethod method;
+        std::string path;
+        bool action;
+        const char* name;
+        RouteHandler handler;
+    };
+    std::vector<ExtraRoute> extraRoutes_;
 
     WebRoutes& routes_;
     SavedNetworksApi& networksApi_;

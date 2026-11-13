@@ -21,7 +21,15 @@ EspManager::EspManager(std::shared_ptr<Esp32Platform> owned, Platform& platform)
     events_.connectFailed.add([this](const std::string& ssid, FailureReason reason)
                               { history_.recordConnectFailed(ssid, reason); });
     events_.disconnected.add([this](FailureReason reason) { history_.recordDisconnected(reason); });
-    events_.settingChanged.add([this](const Setting& setting) { time_.settingChanged(setting); });
+    events_.settingChanged.add(
+        [this](const Setting& setting)
+        {
+            time_.settingChanged(setting);
+            if (updates_)
+            {
+                updates_->settingChanged(setting);
+            }
+        });
 }
 
 void EspManager::begin()
@@ -39,6 +47,7 @@ void EspManager::begin()
     if (updates_)
     {
         updates_->begin();
+        updates_->addRoutes(management_);
     }
     else if (platform_.system.firmwarePending())
     {
@@ -327,9 +336,9 @@ UpdateManager& EspManager::updates()
                                    [this] { return portal_.state() == PortalState::Active; },
                                    [this] { return time_.synchronised() ? time_.now() : 0; },
                                    [this] { restart(); }};
-        updates_ =
-            std::make_unique<UpdateManager>(platform_.clock, platform_.system, platform_.storage,
-                                            connection_, events_, log_, std::move(hooks));
+        updates_ = std::make_unique<UpdateManager>(platform_.clock, platform_.system,
+                                                   platform_.storage, settings_, connection_,
+                                                   events_, log_, std::move(hooks));
         UpdateDriver* driver = platform_.updates;
 #ifdef ARDUINO
         if (driver == nullptr)

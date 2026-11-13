@@ -203,5 +203,61 @@
   "syncFailed": "Couldn't start a sync.",
   "yes": "Yes",
   "no": "No",
-  "noDst": "{zone}, without daylight saving"
+  "noDst": "{zone}, without daylight saving",
+  "updates": "Updates",
+  "installedVersion": "Installed version",
+  "updateChannel": "Channel",
+  "autoCheck": "Automatic checks",
+  "everyHours": "Every {hours} h",
+  "off": "Off",
+  "whenFound": "When an update is found",
+  "policies": {
+    "notify": "Only tell me",
+    "install": "Install it"
+  },
+  "checkForUpdates": "Check for updates",
+  "checkingUpdates": "Checking…",
+  "upToDate": "This is the latest version.",
+  "newVersion": "New version available",
+  "installUpdate": "Install update",
+  "installConfirm": "The device downloads {version}, checks it and restarts with it. It's offline for a moment while it restarts.",
+  "updateSteps": {
+    "downloading": "Downloading",
+    "verifying": "Verifying",
+    "installing": "Installing",
+    "restarting": "Restarting"
+  },
+  "doNotPowerOff": "Do not power off the device.",
+  "updatedTo": "Updated to {version}.",
+  "lastUpdate": "Last update",
+  "outcomes": {
+    "pending": "Installed, waiting for the new firmware to confirm",
+    "succeeded": "Succeeded",
+    "failed": "Failed",
+    "rolled-back": "Rolled back to the previous firmware"
+  },
+  "methods": {
+    "manual": "by hand",
+    "automatic": "automatically"
+  },
+  "updateProblem": "Last problem: {reason}",
+  "updateErrors": {
+    "server-unreachable": "The update server didn't answer.",
+    "http-status": "The update server answered with an error.",
+    "manifest-invalid": "The update server's description of the update isn't valid.",
+    "version-invalid": "A version number isn't valid.",
+    "too-old": "This version is too old to update to the new one directly.",
+    "no-space": "The update doesn't fit on the device.",
+    "low-memory": "The device has too little free memory right now.",
+    "no-ota-partition": "This device can't install updates.",
+    "unsigned": "The device has no key to check updates with.",
+    "download-failed": "The download broke off.",
+    "size-mismatch": "The download has the wrong size.",
+    "hash-mismatch": "The download is damaged.",
+    "signature-invalid": "The update isn't signed by the device's maker.",
+    "write-failed": "The update couldn't be written.",
+    "rolled-back": "The new firmware didn't start properly, so the device went back to the previous one.",
+    "busy": "The device is busy with an update.",
+    "none-available": "There's no update to install."
+  }
 }
