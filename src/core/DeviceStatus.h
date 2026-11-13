@@ -85,6 +85,9 @@ const char* toString(ConnectionState state);
 // "Off" or "Active".
 const char* toString(PortalState state);
 
+// Writes an update record as one JSON object.
+void writeJson(JsonWriter& json, const UpdateRecord& record);
+
 // Writes `status` as one JSON object, for GET /api/status.
 void writeJson(JsonWriter& json, const DeviceStatus& status);
 

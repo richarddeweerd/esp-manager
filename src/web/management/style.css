@@ -59,3 +59,7 @@ nav.tabs button b { position: relative; }
   background: var(--bad); }
 .content > .lead { color: var(--muted); margin: 6px 0 8px; }
 .content > .foot { display: grid; gap: 8px; padding-top: 16px; }
+.progress { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 4px 0 12px; }
+.progress i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.notes { white-space: pre-wrap; margin: 8px 2px 12px; }
+.content > .btn.block { margin-top: 10px; }

@@ -4,7 +4,9 @@
 #include "core/DeviceStatus.h"
 #include "core/Events.h"
 #include "core/Logger.h"
+#include "core/ManagementInterface.h"
 #include "core/Manifest.h"
+#include "core/Settings.h"
 #include "core/Storage.h"
 #include "core/System.h"
 #include "core/UpdateDriver.h"
@@ -51,6 +53,13 @@ public:
     // Where the history record lives.
     static constexpr const char* kNamespace = "espmgr-ota";
 
+    // The keys of the Updates Section's Settings, and its title.
+    static constexpr const char* kAutoKey = "upd-auto";
+    static constexpr const char* kHoursKey = "upd-hours";
+    static constexpr const char* kPolicyKey = "upd-policy";
+    static constexpr const char* kChannelKey = "upd-channel";
+    static constexpr const char* kSectionTitle = "Updates";
+
     struct Hooks
     {
         // The installed version, as given to esp.setFirmwareVersion().
@@ -63,8 +72,8 @@ public:
         std::function<void()> restart;
     };
 
-    UpdateManager(Clock& clock, System& system, Storage& storage, const WifiConnection& connection,
-                  Events& events, Logger& log, Hooks hooks);
+    UpdateManager(Clock& clock, System& system, Storage& storage, Settings& settings,
+                  const WifiConnection& connection, Events& events, Logger& log, Hooks hooks);
 
     virtual ~UpdateManager() = default;
 
@@ -84,10 +93,8 @@ public:
     }
     // The Update Channel, "stable" by default: 1 to 32 letters, digits, "-" or "_".
     bool setChannel(const std::string& channel);
-    const std::string& channel() const
-    {
-        return channel_;
-    }
+    // The channel in use: the Owner's, or else the Developer's.
+    std::string channel() const;
     // The URL of the Manifest; empty while no server is set.
     std::string manifestUrl() const;
 
@@ -108,22 +115,14 @@ public:
     // Checks automatically: about a minute after connecting, then every interval. Off by
     // default.
     UpdateManager& setAutoCheck(bool on);
-    bool autoCheck() const
-    {
-        return autoCheck_;
-    }
+    // Whether automatic checks are on: the Owner's choice, or else the Developer's.
+    bool autoCheck() const;
     // 24 hours by default, at least 15 minutes; returns false, changing nothing, below that.
     bool setCheckInterval(uint32_t ms);
-    uint32_t checkInterval() const
-    {
-        return intervalMs_;
-    }
+    uint32_t checkInterval() const;
     // What to do when a check finds an update: Notify (the default) or Install.
     UpdateManager& setInstallPolicy(InstallPolicy policy);
-    InstallPolicy installPolicy() const
-    {
-        return policy_;
-    }
+    InstallPolicy installPolicy() const;
     // With the Install policy, installs only once `condition` returns true, for example not
     // while a motor runs. Asked on every process() while an update waits.
     UpdateManager& setInstallCondition(std::function<bool()> condition);
@@ -133,6 +132,14 @@ public:
     // Leaves confirming new firmware to the sketch's markValid(), instead of confirming once it
     // connects or has run for 10 minutes.
     UpdateManager& confirmManually();
+
+    // Lets the Owner change automatic checks, their interval (in hours), the install policy and
+    // the Update Channel: an "Updates" Section of Settings, shown in the Provisioning Portal, and
+    // in the Management Interface after editableInManagement(). Call it before begin() and after
+    // the setters above, whose values become the defaults; a Settings Reset goes back to them.
+    UpdateManager& ownerCanEdit();
+    // Makes the Updates Section editable in the Management Interface too.
+    UpdateManager& editableInManagement();
 
     // --- Actions ---
 
@@ -194,6 +201,12 @@ public:
     virtual void begin();
     virtual void process();
     virtual void writeStatus(UpdateStatus& status) const;
+    // GET /api/updates and POST /api/updates/check and /install, behind the password.
+    virtual void addRoutes(ManagementInterface& management);
+    // Applies a change to one of the Updates Section's Settings.
+    virtual void settingChanged(const Setting& setting);
+    // The answer to GET /api/updates.
+    void writeJson(JsonWriter& json) const;
 
 private:
     UpdateRequest request(const std::string& url) const;
@@ -207,12 +220,14 @@ private:
     // At begin(): turns a Pending record into Succeeded or RolledBack.
     void reportOutcome();
     void confirmNow();
+    void autoCheckChanged();
     void loadRecord();
     void saveRecord();
 
     Clock& clock_;
     System& system_;
     Storage& storage_;
+    Settings& settings_;
     const WifiConnection& connection_;
     Events& events_;
     Logger& log_;
@@ -231,6 +246,13 @@ private:
     std::function<bool()> installCondition_;
     bool restartAfterInstall_ = true;
     bool confirmManually_ = false;
+
+    // The Updates Section's Settings, once declared.
+    CheckboxSetting* autoSetting_ = nullptr;
+    NumberSetting* hoursSetting_ = nullptr;
+    SelectSetting* policySetting_ = nullptr;
+    TextSetting* channelSetting_ = nullptr;
+    bool editableInManagement_ = false;
 
     bool begun_ = false;
     uint64_t begunAtMs_ = 0;

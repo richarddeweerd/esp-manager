@@ -35,7 +35,20 @@ const S = {
   settingsNote: "",
   // Synchronise now: "", "busy", "started" or "failed".
   syncState: "",
+  // The Updates tab: GET /api/updates, the request running ("", "check" or "install"), why one
+  // was refused, whether the Owner checked this visit, the version the device restarts into, a
+  // note once it's back, and the install confirmation sheet.
+  updates: null,
+  updateBusy: "",
+  updateError: "",
+  checked: false,
+  restartingTo: "",
+  updateNote: "",
+  updateConfirm: false,
 };
+
+// The update states in which the device is working on something.
+const UPDATE_ACTIVE = ["checking", "downloading", "verifying", "installing", "restarting"];
 
 // What the Device tab can do: [request, strings key, whether it erases something].
 const ACTIONS = {
@@ -86,6 +99,51 @@ async function runAction(key) {
 }
 
 const typing = () => S.netSheet || S.tab === "settings";
+
+// Keeps the Updates tab current: every second while the device is busy or restarting, every
+// five seconds otherwise, and not at all once the Owner leaves the tab.
+let updatesLoop = 0;
+async function pollUpdates() {
+  const loop = ++updatesLoop;
+  while (loop === updatesLoop && (S.tab === "updates" || S.restartingTo)) {
+    try {
+      const u = await getJson("/api/updates");
+      if (S.restartingTo && u.state !== "restarting") {
+        // Back after the restart.
+        S.updateNote = u.installed === S.restartingTo
+          ? STRINGS.updatedTo.replace("{version}", u.installed) : "";
+        S.restartingTo = "";
+        S.status = await getJson("/api/status");
+      } else if (u.state === "restarting") S.restartingTo = u.available.version;
+      S.updates = u;
+    } catch (error) {
+      // While restarting, the device is away for a moment.
+    }
+    if (loop !== updatesLoop) return;
+    if (S.tab === "updates" && !S.updateConfirm) render();
+    const busy = S.restartingTo || (S.updates && UPDATE_ACTIVE.includes(S.updates.state));
+    await new Promise((resolve) => setTimeout(resolve, busy ? 1000 : 5000));
+  }
+}
+
+async function updateRequest(kind) {
+  S.updateBusy = kind;
+  S.updateError = "";
+  S.updateNote = "";
+  S.updateConfirm = false;
+  render();
+  try {
+    const answer = await postForm(`/api/updates/${kind}`, {});
+    if (!answer.ok) {
+      S.updateError = STRINGS.updateErrors[answer.data.error] || STRINGS.errors.actionFailed;
+    }
+    if (kind === "check") S.checked = true;
+  } catch (error) {
+    S.updateError = STRINGS.errors.unreachableManagement;
+  }
+  S.updateBusy = "";
+  pollUpdates();
+}
 
 async function syncNow() {
   S.syncState = "busy";
@@ -274,6 +332,46 @@ function timeRows(t) {
     <button class="btn secondary block" data-sync ${S.syncState === "busy" ? "disabled" : ""}>${esc(STRINGS.syncNow)}</button>${note}`;
 }
 
+// The Updates tab's progress: each step done, running or still to come.
+function updateSteps(u) {
+  const order = ["downloading", "verifying", "installing", "restarting"];
+  const current = S.restartingTo ? 3 : order.indexOf(u.state);
+  const steps = order.map((step, i) => {
+    const mark = i < current ? "✓" : i === current ? "…" : "";
+    const extra = step === "downloading" && i === current ? ` ${u.progress}%` : "";
+    return `<div class="row"><span class="name">${esc(STRINGS.updateSteps[step])}${extra}</span>
+      <span class="${i < current ? "ok" : "muted"}">${mark}</span></div>`;
+  }).join("");
+  const percent = current === 0 ? u.progress : 100;
+  return `<h3>${esc(u.available.version ? `${u.installed} → ${u.available.version}` : STRINGS.updates)}</h3>
+    <div class="progress" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100">
+      <i style="width:${percent}%"></i></div>
+    <div class="rows">${steps}</div><p class="note">${esc(STRINGS.doNotPowerOff)}</p>`;
+}
+
+function updateRows(u) {
+  const rows = [
+    [STRINGS.installedVersion, u.installed || "–"],
+    [STRINGS.updateChannel, u.channel],
+    [STRINGS.autoCheck, u.autoCheck ? STRINGS.everyHours.replace("{hours}", u.intervalHours) : STRINGS.off],
+    [STRINGS.whenFound, STRINGS.policies[u.policy] || u.policy],
+  ];
+  return `<div class="rows"><dl class="kv">${rows.map(([label, value]) =>
+    `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join("")}</dl></div>`;
+}
+
+// The most recent install attempt.
+function lastUpdate(last) {
+  if (last.outcome === "none") return "";
+  const when = last.epoch ? ` · ${formatMoment(last.epoch * 1000, true)}` : "";
+  const versions = last.from ? `${last.from} → ${last.to}` : last.to;
+  const reason = last.outcome === "failed" && STRINGS.updateErrors[last.error]
+    ? `<p class="muted hint">${esc(STRINGS.updateErrors[last.error])}</p>` : "";
+  return `<h3>${esc(STRINGS.lastUpdate)}</h3><div class="rows"><div class="row"><span class="name">
+    ${esc(versions)}<br><span class="muted">${esc(STRINGS.outcomes[last.outcome] || last.outcome)},
+    ${esc(STRINGS.methods[last.method] || last.method)}${esc(when)}</span></span></div></div>${reason}`;
+}
+
 const tabs = {
   wifi(s) {
     const connected = s.connection === "Connected";
@@ -327,6 +425,32 @@ const tabs = {
       <div class="foot"><button class="btn block" data-save-settings="1">${esc(STRINGS.save)}</button></div>`;
   },
 
+  updates() {
+    const u = S.updates;
+    if (!u) return `<p class="muted">${esc(STRINGS.loading)}</p>`;
+    const installing = S.restartingTo || ["downloading", "verifying", "installing", "restarting"].includes(u.state);
+    if (installing) return updateSteps(u);
+    const checking = u.state === "checking" || S.updateBusy === "check";
+    let found = "";
+    if (u.available.version) {
+      const notes = u.available.notes ? `<p class="notes">${esc(u.available.notes)}</p>` : "";
+      found = `<div class="hero"><div class="sub">${esc(STRINGS.newVersion)}</div>
+        <div class="big">${esc(`${u.installed} → ${u.available.version}`)}</div></div>${notes}
+        <button class="btn block" data-update="confirm" ${S.updateBusy ? "disabled" : ""}>${esc(STRINGS.installUpdate)}</button>`;
+    } else if (S.checked && !checking && u.lastError.code === "none") {
+      found = `<p class="muted">${esc(STRINGS.upToDate)}</p>`;
+    }
+    const problem = S.updateError ? S.updateError
+      : u.lastError.code !== "none" && STRINGS.updateErrors[u.lastError.code]
+        ? STRINGS.updateProblem.replace("{reason}", STRINGS.updateErrors[u.lastError.code]) : "";
+    const note = S.updateNote ? `<p class="muted">✓ ${esc(S.updateNote)}</p>` : "";
+    return `${note}${found}
+      <button class="btn secondary block" data-update="check" ${checking || S.updateBusy ? "disabled" : ""}>
+        ${esc(checking ? STRINGS.checkingUpdates : STRINGS.checkForUpdates)}</button>
+      ${problem ? `<p class="error">${esc(problem)}</p>` : ""}
+      <h3>${esc(STRINGS.updates)}</h3>${updateRows(u)}${lastUpdate(u.last)}`;
+  },
+
   device(s) {
     const rows = [
       [STRINGS.hostname, s.hostname],
@@ -348,7 +472,9 @@ const tabs = {
 // The Settings tab is there only when the Developer marked a Setting for this site.
 function visibleTabs() {
   const settings = S.settings && S.settings.sections.length ? [["settings", "☰", STRINGS.settings]] : [];
-  return [["wifi", "📶", STRINGS.wifi], ["status", "ⓘ", STRINGS.status], ...settings,
+  const updates = S.status && S.status.update && S.status.update.configured
+    ? [["updates", "⟳", STRINGS.updates]] : [];
+  return [["wifi", "📶", STRINGS.wifi], ["status", "ⓘ", STRINGS.status], ...settings, ...updates,
     ["device", "⚙", STRINGS.device]];
 }
 
@@ -382,6 +508,14 @@ function networkSheet() {
 // The bottom sheet for the Device tab's action: confirm first, then what happened.
 function sheet() {
   if (S.netSheet) return networkSheet();
+  if (S.updateConfirm && S.updates) {
+    const version = S.updates.available.version;
+    return `<div class="scrim" data-sheet="cancel"><div class="sheet" role="dialog" aria-modal="true">
+      <div class="grab"></div><h2>${esc(STRINGS.installUpdate)}</h2>
+      <p class="lead">${esc(STRINGS.installConfirm.replace("{version}", version))}</p>
+      <div class="foot"><button class="btn block" data-update="install">${esc(STRINGS.installUpdate)}</button>
+        <button class="btn secondary block" data-sheet="cancel">${esc(STRINGS.cancel)}</button></div></div></div>`;
+  }
   if (!S.action) return "";
   const [, name, erases] = ACTIONS[S.action];
   const text = STRINGS.actions[name];
@@ -440,6 +574,7 @@ app.addEventListener("click", (event) => {
     } else if (what === "cancel") {
       S.action = null;
       S.netSheet = null;
+      S.updateConfirm = false;
       render();
     }
     return;
@@ -452,6 +587,14 @@ app.addEventListener("click", (event) => {
   }
   if (event.target.closest("[data-save-settings]")) {
     saveSettings();
+    return;
+  }
+  const update = event.target.closest("[data-update]");
+  if (update) {
+    if (update.dataset.update === "confirm") {
+      S.updateConfirm = true;
+      render();
+    } else updateRequest(update.dataset.update);
     return;
   }
   if (event.target.closest("[data-sync]")) {
@@ -491,6 +634,10 @@ app.addEventListener("click", (event) => {
   S.tab = tab.dataset.tab;
   if (S.tab === "wifi") loadNetworks();
   if (S.tab === "status") loadHistory();
+  if (S.tab === "updates") {
+    S.updateError = "";
+    pollUpdates();
+  }
   if (S.tab === "settings") {
     // Fresh values, and anything not saved earlier is dropped.
     S.settingsLoaded = false;

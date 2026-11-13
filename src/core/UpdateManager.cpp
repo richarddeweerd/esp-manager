@@ -1,6 +1,7 @@
 #include "core/UpdateManager.h"
 
 #include "core/Base64.h"
+#include "core/JsonWriter.h"
 #include "core/SemVer.h"
 
 #include <cstdio>
@@ -40,11 +41,22 @@ std::string toHex(const UpdateDriver::Sha256& hash)
 
 }  // namespace
 
-UpdateManager::UpdateManager(Clock& clock, System& system, Storage& storage,
+static bool validChannel(const std::string& channel)
+{
+    bool ok = !channel.empty() && channel.size() <= UpdateManager::kMaxChannelLength;
+    for (const char c : channel)
+    {
+        ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                    c == '-' || c == '_');
+    }
+    return ok;
+}
+
+UpdateManager::UpdateManager(Clock& clock, System& system, Storage& storage, Settings& settings,
                              const WifiConnection& connection, Events& events, Logger& log,
                              Hooks hooks)
-    : clock_(clock), system_(system), storage_(storage), connection_(connection), events_(events),
-      log_(log), hooks_(std::move(hooks))
+    : clock_(clock), system_(system), storage_(storage), settings_(settings),
+      connection_(connection), events_(events), log_(log), hooks_(std::move(hooks))
 {
 }
 
@@ -69,13 +81,7 @@ bool UpdateManager::setServer(const std::string& url)
 
 bool UpdateManager::setChannel(const std::string& channel)
 {
-    bool ok = !channel.empty() && channel.size() <= kMaxChannelLength;
-    for (const char c : channel)
-    {
-        ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-                    c == '-' || c == '_');
-    }
-    if (!ok)
+    if (!validChannel(channel))
     {
         log_.error(kTag, "refusing Update Channel \"%s\": use 1 to 32 letters, digits, - or _",
                    channel.c_str());
@@ -87,7 +93,108 @@ bool UpdateManager::setChannel(const std::string& channel)
 
 std::string UpdateManager::manifestUrl() const
 {
-    return server_.empty() ? std::string() : server_ + channel_ + ".json";
+    return server_.empty() ? std::string() : server_ + channel() + ".json";
+}
+
+std::string UpdateManager::channel() const
+{
+    if (channelSetting_ != nullptr && validChannel(channelSetting_->value()))
+    {
+        return channelSetting_->value();
+    }
+    return channel_;
+}
+
+bool UpdateManager::autoCheck() const
+{
+    return autoSetting_ != nullptr ? autoSetting_->value() : autoCheck_;
+}
+
+uint32_t UpdateManager::checkInterval() const
+{
+    if (hoursSetting_ != nullptr && hoursSetting_->value() > 0)
+    {
+        return static_cast<uint32_t>(hoursSetting_->value()) * 60UL * 60 * 1000;
+    }
+    return intervalMs_;
+}
+
+InstallPolicy UpdateManager::installPolicy() const
+{
+    if (policySetting_ != nullptr)
+    {
+        return policySetting_->value() == "install" ? InstallPolicy::Install
+                                                    : InstallPolicy::Notify;
+    }
+    return policy_;
+}
+
+UpdateManager& UpdateManager::ownerCanEdit()
+{
+    if (autoSetting_ != nullptr)
+    {
+        return *this;
+    }
+    SettingsSection& section = settings_.section(kSectionTitle);
+    autoSetting_ = &section.addCheckbox(kAutoKey, "Check for updates automatically", autoCheck_);
+    const uint32_t hours = intervalMs_ / (60UL * 60 * 1000);
+    hoursSetting_ = &section
+                         .addNumber(kHoursKey, "Check every (hours)",
+                                    static_cast<int32_t>(hours < 1 ? 1 : hours))
+                         .range(1, 720);
+    policySetting_ = &section
+                          .addSelect(kPolicyKey, "When an update is found",
+                                     policy_ == InstallPolicy::Install ? "install" : "notify")
+                          .option("notify", "Only tell me")
+                          .option("install", "Install it");
+    channelSetting_ = &section.addText(kChannelKey, "Update channel", channel_)
+                           .maxLength(kMaxChannelLength)
+                           .validate(
+                               [](const std::string& value)
+                               {
+                                   return validChannel(value)
+                                              ? std::string()
+                                              : std::string("Use letters, digits, - or _.");
+                               });
+    if (editableInManagement_)
+    {
+        editableInManagement_ = false;
+        editableInManagement();
+    }
+    return *this;
+}
+
+UpdateManager& UpdateManager::editableInManagement()
+{
+    editableInManagement_ = true;
+    if (autoSetting_ != nullptr)
+    {
+        autoSetting_->editableInManagement();
+        hoursSetting_->editableInManagement();
+        policySetting_->editableInManagement();
+        channelSetting_->editableInManagement();
+    }
+    return *this;
+}
+
+void UpdateManager::settingChanged(const Setting& setting)
+{
+    if (&setting == autoSetting_ || &setting == hoursSetting_)
+    {
+        autoCheckChanged();
+    }
+}
+
+void UpdateManager::autoCheckChanged()
+{
+    if (!autoCheck())
+    {
+        nextCheckMs_ = 0;
+    }
+    else if (nextCheckMs_ == 0 && wasConnected_)
+    {
+        nextCheckMs_ = clock_.nowMs() + kFirstCheckDelayMs + clock_.random(kCheckJitterMs);
+    }
 }
 
 UpdateManager& UpdateManager::setPublicKey(const char* pem)
@@ -128,14 +235,7 @@ bool UpdateManager::addHeader(const std::string& name, const std::string& value)
 UpdateManager& UpdateManager::setAutoCheck(bool on)
 {
     autoCheck_ = on;
-    if (!on)
-    {
-        nextCheckMs_ = 0;
-    }
-    else if (nextCheckMs_ == 0 && wasConnected_)
-    {
-        nextCheckMs_ = clock_.nowMs() + kFirstCheckDelayMs + clock_.random(kCheckJitterMs);
-    }
+    autoCheckChanged();
     return *this;
 }
 
@@ -269,11 +369,91 @@ void UpdateManager::writeStatus(UpdateStatus& status) const
 {
     status.configured = configured();
     status.state = state_;
-    status.channel = channel_;
+    status.channel = channel();
     status.available = available_.version;
     status.progress = percent_;
     status.pending = awaitingConfirm_;
     status.last = record_;
+}
+
+void UpdateManager::writeJson(JsonWriter& json) const
+{
+    json.beginObject()
+        .key("installed")
+        .string(hooks_.installedVersion ? hooks_.installedVersion() : "")
+        .key("channel")
+        .string(channel())
+        .key("state")
+        .string(toString(state_))
+        .key("progress")
+        .number(percent_)
+        .key("available")
+        .beginObject()
+        .key("version")
+        .string(available_.version)
+        .key("notes")
+        .string(available_.notes)
+        .key("size")
+        .number(static_cast<int64_t>(available_.size))
+        .endObject()
+        .key("autoCheck")
+        .boolean(autoCheck())
+        .key("intervalHours")
+        .number(static_cast<int64_t>(checkInterval() / (60UL * 60 * 1000)))
+        .key("policy")
+        .string(installPolicy() == InstallPolicy::Install ? "install" : "notify")
+        .key("pending")
+        .boolean(awaitingConfirm_)
+        .key("lastError")
+        .beginObject()
+        .key("code")
+        .string(toString(lastError_.code))
+        .key("httpStatus")
+        .number(lastError_.httpStatus)
+        .key("version")
+        .string(lastError_.version)
+        .endObject()
+        .key("last");
+    espmgr::writeJson(json, record_);
+    json.endObject();
+}
+
+void UpdateManager::addRoutes(ManagementInterface& management)
+{
+    management.addRoute(HttpMethod::Get, "/api/updates", false, "updates",
+                        [this](const HttpRequest&, HttpServer& http)
+                        {
+                            JsonWriter json;
+                            writeJson(json);
+                            http.send(200, "application/json", json.str());
+                        });
+    management.addRoute(HttpMethod::Post, "/api/updates/check", true, "update check",
+                        [this](const HttpRequest&, HttpServer& http)
+                        {
+                            const bool started = check();
+                            http.send(started ? 200 : 409, "application/json",
+                                      started ? "{\"ok\":true}" : "{\"error\":\"busy\"}");
+                        });
+    management.addRoute(HttpMethod::Post, "/api/updates/install", true, "update install",
+                        [this](const HttpRequest&, HttpServer& http)
+                        {
+                            const bool available = state_ == UpdateState::Available;
+                            const UpdateErrorCode before = lastError_.code;
+                            if (install())
+                            {
+                                http.send(200, "application/json", "{\"ok\":true}");
+                                return;
+                            }
+                            // A refusal before downloading says why; otherwise there was
+                            // nothing to install, or something else runs.
+                            std::string code = available || busy() ? "busy" : "none-available";
+                            if (available && lastError_.code != UpdateErrorCode::None &&
+                                state_ == UpdateState::Available && lastError_.code != before)
+                            {
+                                code = toString(lastError_.code);
+                            }
+                            http.send(409, "application/json", "{\"error\":\"" + code + "\"}");
+                        });
 }
 
 void UpdateManager::process()
@@ -284,7 +464,7 @@ void UpdateManager::process()
     }
     const uint64_t now = clock_.nowMs();
     const bool connected = connection_.state() == ConnectionState::Connected;
-    if (connected && !wasConnected_ && autoCheck_ && nextCheckMs_ == 0)
+    if (connected && !wasConnected_ && autoCheck() && nextCheckMs_ == 0)
     {
         nextCheckMs_ = now + kFirstCheckDelayMs + clock_.random(kCheckJitterMs);
     }
@@ -324,7 +504,7 @@ void UpdateManager::process()
         }
         break;
     case UpdateState::Available:
-        if (policy_ == InstallPolicy::Install && !autoInstallTried_ && connected &&
+        if (installPolicy() == InstallPolicy::Install && !autoInstallTried_ && connected &&
             (!installCondition_ || installCondition_()))
         {
             autoInstallTried_ = true;
@@ -337,7 +517,7 @@ void UpdateManager::process()
     }
 
     const bool canCheck = state_ == UpdateState::Idle || state_ == UpdateState::Available;
-    if (autoCheck_ && configured() && connected && canCheck && nextCheckMs_ != 0 &&
+    if (autoCheck() && configured() && connected && canCheck && nextCheckMs_ != 0 &&
         now >= nextCheckMs_ && !(hooks_.portalActive && hooks_.portalActive()))
     {
         startCheck(UpdateMethod::Automatic);
@@ -364,9 +544,9 @@ void UpdateManager::startCheck(UpdateMethod method)
     state_ = UpdateState::Checking;
     autoInstallTried_ = false;
     // Any check, also a manual one, moves the next automatic one.
-    if (autoCheck_)
+    if (autoCheck())
     {
-        nextCheckMs_ = clock_.nowMs() + intervalMs_;
+        nextCheckMs_ = clock_.nowMs() + checkInterval();
     }
 }
 

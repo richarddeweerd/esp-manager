@@ -24,6 +24,24 @@ const char* toString(PortalState state)
     return state == PortalState::Active ? "Active" : "Off";
 }
 
+void writeJson(JsonWriter& json, const UpdateRecord& record)
+{
+    json.beginObject()
+        .key("outcome")
+        .string(toString(record.outcome))
+        .key("from")
+        .string(record.fromVersion)
+        .key("to")
+        .string(record.toVersion)
+        .key("method")
+        .string(toString(record.method))
+        .key("error")
+        .string(toString(record.error))
+        .key("epoch")
+        .number(record.epoch)
+        .endObject();
+}
+
 void writeJson(JsonWriter& json, const DeviceStatus& status)
 {
     const bool connected = status.connection == ConnectionState::Connected;
@@ -95,23 +113,9 @@ void writeJson(JsonWriter& json, const DeviceStatus& status)
         .number(status.update.progress)
         .key("pending")
         .boolean(status.update.pending)
-        .key("last")
-        .beginObject()
-        .key("outcome")
-        .string(toString(status.update.last.outcome))
-        .key("from")
-        .string(status.update.last.fromVersion)
-        .key("to")
-        .string(status.update.last.toVersion)
-        .key("method")
-        .string(toString(status.update.last.method))
-        .key("error")
-        .string(toString(status.update.last.error))
-        .key("epoch")
-        .number(status.update.last.epoch)
-        .endObject()
-        .endObject()
-        .endObject();
+        .key("last");
+    writeJson(json, status.update.last);
+    json.endObject().endObject();
 }
 
 }  // namespace espmgr
