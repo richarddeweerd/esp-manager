@@ -234,16 +234,8 @@ private:
     NetworkScanner scanner_{platform_.wifi, platform_.clock, log_};
     WifiConnection connection_{platform_.wifi, platform_.clock, scanner_, networks_, events_, log_};
     NetworkTime time_{platform_.time, platform_.clock, connection_, settings_, events_, log_};
-    UpdateManager updates_{platform_.clock,
-                           platform_.system,
-                           platform_.storage,
-                           connection_,
-                           events_,
-                           log_,
-                           {[this] { return firmwareVersion_; },
-                            [this] { return portal_.state() == PortalState::Active; },
-                            [this] { return time_.synchronised() ? time_.now() : 0; },
-                            [this] { restart(); }}};
+    // Made by the first updates() call; only used through its virtual functions otherwise.
+    std::unique_ptr<UpdateManager> updates_;
     WebRoutes routes_{platform_.wifi, platform_.http};
     SavedNetworksApi networksApi_{routes_, networks_, connection_, log_};
     SettingsApi settingsApi_{routes_, settings_, log_};

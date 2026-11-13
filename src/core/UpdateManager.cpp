@@ -265,6 +265,17 @@ void UpdateManager::reportOutcome()
     fail(UpdateErrorCode::RolledBack, record_.toVersion);
 }
 
+void UpdateManager::writeStatus(UpdateStatus& status) const
+{
+    status.configured = configured();
+    status.state = state_;
+    status.channel = channel_;
+    status.available = available_.version;
+    status.progress = percent_;
+    status.pending = awaitingConfirm_;
+    status.last = record_;
+}
+
 void UpdateManager::process()
 {
     if (!begun_ || driver_ == nullptr)

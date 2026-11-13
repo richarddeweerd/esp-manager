@@ -36,7 +36,16 @@ void EspManager::begin()
     history_.begin();
     connection_.begin();
     time_.begin();
-    updates_.begin();
+    if (updates_)
+    {
+        updates_->begin();
+    }
+    else if (platform_.system.firmwarePending())
+    {
+        // Updates aren't used: accept firmware installed some other way (ArduinoOTA) at once,
+        // as the platform does by itself.
+        platform_.system.confirmFirmware();
+    }
     portal_.begin();
     management_.begin();
 }
@@ -57,8 +66,11 @@ void EspManager::process()
     scanner_.process();
     connection_.process();
     time_.process();
-    updates_.process();
-    if (portalAfterUpdate_ && !updates_.busy())
+    if (updates_)
+    {
+        updates_->process();
+    }
+    if (portalAfterUpdate_ && !(updates_ && updates_->busy()))
     {
         portalAfterUpdate_ = false;
         portal_.start();
@@ -137,13 +149,10 @@ DeviceStatus EspManager::status() const
     status.time.dst = time_.dst();
     status.time.posix = time_.timezone();
     status.time.lastSync = time_.lastSync();
-    status.update.configured = updates_.configured();
-    status.update.state = updates_.state();
-    status.update.channel = updates_.channel();
-    status.update.available = updates_.available().version;
-    status.update.progress = updates_.progress();
-    status.update.pending = updates_.pending();
-    status.update.last = updates_.lastResult();
+    if (updates_)
+    {
+        updates_->writeStatus(status.update);
+    }
     return status;
 }
 
@@ -205,7 +214,7 @@ bool EspManager::setNamePrefix(const std::string& prefix)
 
 void EspManager::startPortal()
 {
-    if (updates_.busy())
+    if (updates_ && updates_->busy())
     {
         // The portal's scan and channel change would break the download.
         log_.info("core", "the Provisioning Portal opens once the update is done");
@@ -307,11 +316,26 @@ NetworkTime& EspManager::ntp()
 
 UpdateManager& EspManager::updates()
 {
-    if (!updates_.attached() && platform_.updates != nullptr)
+    if (!updates_)
     {
-        updates_.attach(*platform_.updates);
+        UpdateManager::Hooks hooks{[this] { return firmwareVersion_; },
+                                   [this] { return portal_.state() == PortalState::Active; },
+                                   [this] { return time_.synchronised() ? time_.now() : 0; },
+                                   [this] { restart(); }};
+        updates_ =
+            std::make_unique<UpdateManager>(platform_.clock, platform_.system, platform_.storage,
+                                            connection_, events_, log_, std::move(hooks));
+        if (platform_.updates != nullptr)
+        {
+            updates_->attach(*platform_.updates);
+        }
+        if (begun_)
+        {
+            // Called first after begin(): pending firmware was confirmed there already.
+            updates_->begin();
+        }
     }
-    return updates_;
+    return *updates_;
 }
 
 SavedNetworks& EspManager::networks()

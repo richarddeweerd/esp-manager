@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Clock.h"
+#include "core/DeviceStatus.h"
 #include "core/Events.h"
 #include "core/Logger.h"
 #include "core/Manifest.h"
@@ -24,6 +25,9 @@ namespace espmgr
 // makes it the boot image and restarts. New firmware is pending until it confirms itself, so a
 // firmware that can't start properly is rolled back by the bootloader. Nothing here blocks
 // process(): the platform's UpdateDriver does the HTTPS work in the background.
+//
+// EspManager creates it only when the sketch first calls esp.updates() and reaches it through
+// the virtual functions below, so sketches without updates don't link any of it.
 class UpdateManager
 {
 public:
@@ -61,6 +65,8 @@ public:
 
     UpdateManager(Clock& clock, System& system, Storage& storage, const WifiConnection& connection,
                   Events& events, Logger& log, Hooks hooks);
+
+    virtual ~UpdateManager() = default;
 
     UpdateManager(const UpdateManager&) = delete;
     UpdateManager& operator=(const UpdateManager&) = delete;
@@ -175,7 +181,7 @@ public:
         return driver_ != nullptr && !server_.empty();
     }
     // Whether a download or install is running; the Provisioning Portal waits for it.
-    bool busy() const;
+    virtual bool busy() const;
 
     // Used by EspManager.
     // The platform's driver, from esp.updates(). Without one at begin(), pending firmware is
@@ -185,8 +191,9 @@ public:
     {
         return driver_ != nullptr;
     }
-    void begin();
-    void process();
+    virtual void begin();
+    virtual void process();
+    virtual void writeStatus(UpdateStatus& status) const;
 
 private:
     UpdateRequest request(const std::string& url) const;
