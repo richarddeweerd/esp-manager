@@ -73,10 +73,6 @@ public:
 
     // Bytes the other OTA slot holds; 0 if there's no second slot.
     virtual size_t slotSize() const = 0;
-    // Whether the running firmware is pending: new, and not confirmed yet.
-    virtual bool pendingConfirmation() const = 0;
-    // Confirms the running firmware, so the bootloader no longer rolls it back.
-    virtual void confirm() = 0;
 };
 
 }  // namespace espmgr

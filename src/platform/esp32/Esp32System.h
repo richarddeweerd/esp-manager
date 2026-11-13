@@ -12,6 +12,8 @@ public:
     std::string chipModel() const override;
     ResetReason resetReason() const override;
     void restart() override;
+    bool firmwarePending() const override;
+    void confirmFirmware() override;
 };
 
 }  // namespace espmgr

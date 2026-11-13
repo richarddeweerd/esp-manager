@@ -82,17 +82,6 @@ public:
         return slot;
     }
 
-    bool pendingConfirmation() const override
-    {
-        return pending;
-    }
-
-    void confirm() override
-    {
-        pending = false;
-        ++confirms;
-    }
-
     // Test helpers.
     void finishFetch(const std::string& text)
     {
@@ -139,8 +128,6 @@ public:
     int activations = 0;
     bool activateSucceeds = true;
     size_t slot = 1310720;
-    bool pending = false;
-    int confirms = 0;
 };
 
 }  // namespace espmgr

@@ -219,10 +219,6 @@ bool UpdateManager::markValid()
 void UpdateManager::attach(UpdateDriver& driver)
 {
     driver_ = &driver;
-    if (begun_)
-    {
-        startUp();
-    }
 }
 
 void UpdateManager::begin()
@@ -230,20 +226,22 @@ void UpdateManager::begin()
     begun_ = true;
     begunAtMs_ = clock_.nowMs();
     loadRecord();
-    if (driver_ != nullptr)
-    {
-        startUp();
-    }
-}
-
-void UpdateManager::startUp()
-{
-    if (allowUnsigned_ && publicKey_ == nullptr)
+    if (driver_ != nullptr && allowUnsigned_ && publicKey_ == nullptr)
     {
         log_.warn(kTag, "unsigned firmware updates are allowed; set a Public Key for production");
     }
-    // Every new image starts pending, also one installed some other way.
-    awaitingConfirm_ = driver_->pendingConfirmation();
+    // Every new image starts pending, also one installed some other way, such as ArduinoOTA.
+    awaitingConfirm_ = system_.firmwarePending();
+    reportOutcome();
+    if (awaitingConfirm_ && driver_ == nullptr)
+    {
+        // Updates aren't used, so keep the platform's usual behaviour: accept it at once.
+        confirmNow();
+    }
+}
+
+void UpdateManager::reportOutcome()
+{
     if (record_.outcome != UpdateOutcome::Pending)
     {
         return;
@@ -628,7 +626,7 @@ void UpdateManager::failInstall(UpdateErrorCode code)
 
 void UpdateManager::confirmNow()
 {
-    driver_->confirm();
+    system_.confirmFirmware();
     awaitingConfirm_ = false;
     const std::string installed = hooks_.installedVersion ? hooks_.installedVersion() : "";
     log_.info(kTag, "firmware %s confirmed", installed.c_str());

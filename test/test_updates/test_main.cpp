@@ -590,14 +590,14 @@ void test_new_firmware_is_confirmed_once_connected()
     d.fakes.storage.putString(UpdateManager::kNamespace, "from", "1.0.0");
     d.fakes.storage.putString(UpdateManager::kNamespace, "to", "2.0.0");
     d.esp.setFirmwareVersion("2.0.0");
-    d.fakes.updates.pending = true;
+    d.fakes.system.pending = true;
     d.esp.begin();
     d.esp.process();
     TEST_ASSERT_TRUE(d.updates().pending());
-    TEST_ASSERT_EQUAL(0, d.fakes.updates.confirms);
+    TEST_ASSERT_EQUAL(0, d.fakes.system.confirms);
     d.fakes.wifi.completeConnect(11);
     d.esp.process();
-    TEST_ASSERT_EQUAL(1, d.fakes.updates.confirms);
+    TEST_ASSERT_EQUAL(1, d.fakes.system.confirms);
     TEST_ASSERT_FALSE(d.updates().pending());
     TEST_ASSERT_EQUAL(UpdateOutcome::Succeeded, d.updates().lastResult().outcome);
     TEST_ASSERT_EQUAL(1, *d.fakes.storage.getU32(UpdateManager::kNamespace, "outcome") - 1);
@@ -607,25 +607,25 @@ void test_new_firmware_is_confirmed_once_connected()
 void test_new_firmware_is_confirmed_after_ten_minutes_without_a_connection()
 {
     Device d;
-    d.fakes.updates.pending = true;
+    d.fakes.system.pending = true;
     d.esp.begin();
     d.esp.process();
     d.advance(UpdateManager::kConfirmAfterMs - 1000);
-    TEST_ASSERT_EQUAL(0, d.fakes.updates.confirms);
+    TEST_ASSERT_EQUAL(0, d.fakes.system.confirms);
     d.advance(1000);
-    TEST_ASSERT_EQUAL(1, d.fakes.updates.confirms);
+    TEST_ASSERT_EQUAL(1, d.fakes.system.confirms);
 }
 
 void test_confirming_manually_waits_for_mark_valid()
 {
     Device d;
     d.updates().confirmManually();
-    d.fakes.updates.pending = true;
+    d.fakes.system.pending = true;
     d.connect();
     d.advance(UpdateManager::kConfirmAfterMs + 1000);
-    TEST_ASSERT_EQUAL(0, d.fakes.updates.confirms);
+    TEST_ASSERT_EQUAL(0, d.fakes.system.confirms);
     TEST_ASSERT_TRUE(d.updates().markValid());
-    TEST_ASSERT_EQUAL(1, d.fakes.updates.confirms);
+    TEST_ASSERT_EQUAL(1, d.fakes.system.confirms);
     TEST_ASSERT_FALSE(d.updates().markValid());
 }
 
@@ -644,17 +644,14 @@ void test_a_rolled_back_update_is_reported()
     TEST_ASSERT_EQUAL(4, *d.fakes.storage.getU32(UpdateManager::kNamespace, "outcome"));
 }
 
-void test_a_late_updates_call_still_confirms()
+void test_without_updates_pending_firmware_is_confirmed_at_begin()
 {
-    // updates() first called after begin().
+    // A sketch that doesn't call esp.updates() before begin(), for example one using ArduinoOTA.
     Device d(false);
-    d.fakes.updates.pending = true;
+    d.fakes.system.pending = true;
     d.esp.begin();
-    d.esp.process();
-    d.esp.updates();
-    TEST_ASSERT_TRUE(d.esp.updates().pending());
-    d.advance(UpdateManager::kConfirmAfterMs);
-    TEST_ASSERT_EQUAL(1, d.fakes.updates.confirms);
+    TEST_ASSERT_EQUAL(1, d.fakes.system.confirms);
+    TEST_ASSERT_FALSE(d.esp.updates().pending());
 }
 
 void test_the_record_survives_a_restart_and_status_shows_it()
@@ -715,7 +712,7 @@ int main()
     RUN_TEST(test_new_firmware_is_confirmed_after_ten_minutes_without_a_connection);
     RUN_TEST(test_confirming_manually_waits_for_mark_valid);
     RUN_TEST(test_a_rolled_back_update_is_reported);
-    RUN_TEST(test_a_late_updates_call_still_confirms);
+    RUN_TEST(test_without_updates_pending_firmware_is_confirmed_at_begin);
     RUN_TEST(test_the_record_survives_a_restart_and_status_shows_it);
     RUN_TEST(test_error_codes_have_names);
     return UNITY_END();

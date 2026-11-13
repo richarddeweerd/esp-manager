@@ -178,7 +178,8 @@ public:
     bool busy() const;
 
     // Used by EspManager.
-    // The platform's driver; may come after begin(), when esp.updates() is first called late.
+    // The platform's driver, from esp.updates(). Without one at begin(), pending firmware is
+    // confirmed at once, as the platform does by itself.
     void attach(UpdateDriver& driver);
     bool attached() const
     {
@@ -196,8 +197,8 @@ private:
     void finishInstall();
     void fail(UpdateErrorCode code, const std::string& version, int httpStatus = 0);
     void failInstall(UpdateErrorCode code);
-    // What begin() does once a driver is there: confirming and rollback reporting.
-    void startUp();
+    // At begin(): turns a Pending record into Succeeded or RolledBack.
+    void reportOutcome();
     void confirmNow();
     void loadRecord();
     void saveRecord();
