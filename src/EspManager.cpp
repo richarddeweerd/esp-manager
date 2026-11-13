@@ -314,6 +314,11 @@ NetworkTime& EspManager::ntp()
     return time_;
 }
 
+#ifdef ARDUINO
+// In platform/esp32/Esp32UpdateDriver.cpp; only linked when a sketch calls updates().
+UpdateDriver& esp32UpdateDriver();
+#endif
+
 UpdateManager& EspManager::updates()
 {
     if (!updates_)
@@ -325,9 +330,16 @@ UpdateManager& EspManager::updates()
         updates_ =
             std::make_unique<UpdateManager>(platform_.clock, platform_.system, platform_.storage,
                                             connection_, events_, log_, std::move(hooks));
-        if (platform_.updates != nullptr)
+        UpdateDriver* driver = platform_.updates;
+#ifdef ARDUINO
+        if (driver == nullptr)
         {
-            updates_->attach(*platform_.updates);
+            driver = &esp32UpdateDriver();
+        }
+#endif
+        if (driver != nullptr)
+        {
+            updates_->attach(*driver);
         }
         if (begun_)
         {
