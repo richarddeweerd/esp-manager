@@ -4,11 +4,18 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-13
+
+Firmware updates.
+
 ### Added
 
 - Firmware updates, core (#44): `esp.updates()` checks the Update Server's Manifest (`setServer()` + `setChannel()`, `stable` by default, fetching `<server><channel>.json`), compares versions by SemVer against `esp.setFirmwareVersion()`, and installs a newer image after checking its size, SHA-256 and ECDSA P-256 signature (`setPublicKey()`; without one installs are refused unless `allowUnsigned()`). `setRootCa()`, `addHeader()`, `setAutoCheck()` (off), `setCheckInterval()` (24 hours), `setInstallPolicy(Notify|Install)`, `setInstallCondition()`, `setRestartAfterInstall()`, `confirmManually()`/`markValid()`, `check()`, `install()`, `state()`, `available()`, `progress()`, `lastResult()`. New firmware is confirmed once it connects or has run for 10 minutes; a rolled-back update is reported. Events `onUpdateAvailable`, `onUpdateStarted`, `onUpdateProgress`, `onUpdateCompleted`, `onUpdateFailed`; `esp.status().update` and `GET /api/status` report it. The whole part is created by the first `esp.updates()` call, so sketches without updates don't carry it.
 - Firmware updates on the ESP32 (#45): HTTPS through `esp_http_client` with the platform's certificate bundle (or only `setRootCa()`), at most 3 redirects and only to `https://`; the image streams into the other OTA slot while its SHA-256 is computed; ECDSA P-256 signatures checked with mbedtls; the bootloader rolls back firmware that isn't confirmed. A sketch with updates is about 200 KB larger than one without, so it needs bigger app slots than the default partition table gives: `board_build.partitions = min_spiffs.csv` (two 1.9 MB slots).
 - Firmware updates in the Management Interface (#46): an *Updates* tab once a server is set, with the installed and available version, release notes, *Check for updates*, *Install update*, progress through downloading, verifying, installing and restarting, and the last update. `GET /api/updates`, `POST /api/updates/check` and `/install`. `esp.updates().ownerCanEdit()` adds an "Updates" Section to the Settings (automatic checks, interval in hours, install policy, channel), shown in the Management Interface after `editableInManagement()`.
+- `scripts/sign-firmware.py` (#47): `new-key` makes a Signing Key and prints its Public Key; `sign` signs a firmware image and writes its Manifest. It needs only Python 3 and `openssl`.
+- `examples/Updates` (#47): daily checks against your own Update Server, installed by the Owner from the Management Interface, with the progress printed. The README has a firmware updates guide. `scripts/build-examples.sh` builds sketches that ask for `min_spiffs.csv` with new `<board>-ota` environments.
+- An on-device test of firmware updates (#47), `test_hw_ota`: on the test rig the board refuses a badly signed image, installs a new version over HTTPS, confirms it, and is rolled back by the bootloader from one that doesn't confirm. `scripts/run-hw-tests.py` serves the updates, signed with the test-only keys in `test/keys/`.
 
 ## [0.5.0] - 2026-11-12
 
@@ -72,7 +79,8 @@ The first release: connecting, setup from a phone and an optional management pag
 - Examples: `Basic`, and `Button`, which opens the Provisioning Portal on a short press of the BOOT button and starts a Network Reset or Factory Reset when it's held (#20).
 - Hardware interfaces (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`) with ESP32 implementations, fakes and host unit tests, plus on-device tests and the scripts to build and run them (#3, #28).
 
-[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/richarddeweerd/esp-manager/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/richarddeweerd/esp-manager/compare/v0.2.0...v0.3.0

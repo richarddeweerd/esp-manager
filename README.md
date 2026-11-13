@@ -22,7 +22,7 @@ void loop()
 
 That's the whole [Basic example](examples/Basic). On a new board it opens a Wi-Fi access point with a setup page; once the Owner has picked a network there, the device joins it, and after every restart it reconnects by itself.
 
-Version `0.5.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
+Version `0.6.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHANGELOG.md).
 
 - [What it does](#what-it-does)
 - [Terms](#terms)
@@ -44,9 +44,8 @@ Version `0.5.0`. The API may still change before `1.0.0`; see [CHANGELOG.md](CHA
 - Diagnostics: the library's log lines in your own handler, a Connection History of recent connects, failures and drops, and why the device last started.
 - Your product's look on both web pages: a title, a logo, a light or dark theme and your own CSS.
 - Optional Network Time: the clock set from NTP servers, local time from a time zone you set or the Owner picks.
+- Optional firmware updates from your own server over HTTPS: signed images, automatic or Owner-approved installs, and a rollback when new firmware doesn't start properly.
 - Everything happens in `process()`; nothing waits unless you ask for it.
-
-Planned for later versions: over-the-air updates.
 
 ## Terms
 
@@ -74,7 +73,7 @@ platform = https://github.com/pioarduino/platform-espressif32/releases/download/
 framework = arduino
 board = esp32dev
 monitor_speed = 115200
-lib_deps = richarddeweerd/EspManager@^0.5.0
+lib_deps = richarddeweerd/EspManager@^0.6.0
 ```
 
 Keep the `richarddeweerd/` part: the Registry also has two older ESP8266 libraries called ESPManager and espManager, which are something else.
@@ -463,6 +462,77 @@ esp.ntp().editableInManagement();  // also in the Management Interface
 
 This adds a **Time** Section to the [Settings](#settings), with every named zone of the time zone database to choose from, the phone's own zone already selected, and a *Daylight saving time* checkbox for zones that have it. Unticked, the zone keeps its standard time all year. The Owner's choice overrides `setTimezone()`, until a Settings Reset brings yours back; `esp.ntp().zone()` and `dst()` say what they picked. The Section uses the keys `time-zone`, `time-dst`, `time-posix`, `time-server` and `time-fallback`, so don't declare Settings with those.
 
+### Firmware updates
+
+The device can update itself from your own web server, the Update Server. It reads a small JSON file there, the Manifest, and when that names a newer version it downloads the image over HTTPS into the board's other app slot, checks it, and restarts into it. Every image is signed with your Signing Key, so the device installs nothing that didn't come from you, and new firmware has to prove it starts before the old one is given up.
+
+**Partition table first.** A sketch with updates carries an HTTPS client and is about 200 KB larger, which doesn't fit the default app slots (1.25 MB). Use the table with two 1.9 MB slots:
+
+- PlatformIO: `board_build.partitions = min_spiffs.csv` in your environment.
+- Arduino IDE: *Tools > Partition Scheme > Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)*.
+
+Changing the partition table erases the board's flash, so flash the first firmware with the new table over USB.
+
+**1. Make a Signing Key**, once:
+
+```bash
+scripts/sign-firmware.py new-key signing-key.pem
+```
+
+It prints the Public Key, a PEM block that goes into the sketch. Keep `signing-key.pem` secret and out of your repository: anyone who has it can sign firmware your devices will install. The script needs Python 3 and the `openssl` command.
+
+**2. Set the device up:**
+
+```cpp
+static const char kPublicKey[] = R"(-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE…
+-----END PUBLIC KEY-----
+)";
+
+esp.setFirmwareVersion("1.0.0");                                    // SemVer, compared with the Manifest's
+esp.updates().setServer("https://updates.example.com/thermostat/"); // reads <server>stable.json
+esp.updates().setPublicKey(kPublicKey);                             // not copied: a static string
+esp.updates().setAutoCheck(true);                                   // or call check() yourself
+esp.management().enable();                                          // the Updates tab
+```
+
+**3. For each release**, raise the version in the sketch, build it, sign the image and write its Manifest:
+
+```bash
+scripts/sign-firmware.py sign --key signing-key.pem --version 1.1.0 \
+    --notes "Fixes the display timeout." .pio/build/esp32dev/firmware.bin
+```
+
+This writes `stable.json` next to the image; put both in the server folder. Use the `firmware.bin` the build makes (the app alone), not a merged image for flashing at 0x0.
+
+```json
+{
+  "version": "1.1.0",
+  "url": "firmware.bin",
+  "size": 1315232,
+  "sha256": "4bcaccb89f128135cdceeba7044f00400f1ab2f9c4110d9c4f4a2bbaa0dc4986",
+  "signature": "MEUCIHcTrdEnZPnerZu97Yo4pEPPI4gn2kXbZ1UKsJ7CHmueAiEAm6U2jAjLXkh7…",
+  "notes": "Fixes the display timeout."
+}
+```
+
+`url` is absolute or relative to the Manifest. `--minimum-version 1.0.0` adds `minimumVersion`: older devices then report `TooOld` instead of installing, for a release they can't jump to. The Manifest is at most 4 KB and the notes at most 1 KB.
+
+- **Versions**: [SemVer](https://semver.org/) precedence, so `1.10.0` is newer than `1.9.5` and `1.5.0-beta.1` older than `1.5.0`. Only a newer version is offered, never a downgrade. A version that isn't SemVer, in the sketch or the Manifest, offers nothing and logs an `Error`.
+- **Channels**: `esp.updates().setChannel("beta")` reads `beta.json` instead of `stable.json` (1 to 32 letters, digits, `-` or `_`). For different products, give each its own server folder.
+- **Checking**: with `setAutoCheck(true)` the first check runs about a minute after connecting, then every 24 hours (`setCheckInterval(ms)`, at least 15 minutes), never while the Provisioning Portal is open. `check()` checks now. A check that finds nothing new raises nothing.
+- **Installing**: the default policy, `Notify`, only raises `onUpdateAvailable` and shows the update in the Management Interface; `install()` or the Owner's *Install update* installs it. `setInstallPolicy(espmgr::InstallPolicy::Install)` installs by itself, once `setInstallCondition(fn)`'s function, if you set one, returns true ("not while the pump runs"). Before downloading, the device checks that the image fits the other slot, that 40 KB of heap is free for TLS, and that the partition table has two app slots.
+- **Downloading** happens in the background; `process()` keeps running, and so does Wi-Fi. The image is checked against `size`, `sha256` and `signature` before it becomes the boot image. Then the device restarts after 2 s, unless `setRestartAfterInstall(false)` leaves that to you. A failed or interrupted download leaves the running firmware alone.
+- **Confirming**: new firmware starts as *pending*. It's confirmed once it connects to a Saved Network, or after running for 10 minutes. If it restarts before that, after a crash say, the bootloader goes back to the previous firmware, which reports `RolledBack`. With `confirmManually()` your sketch calls `esp.updates().markValid()` itself, once it knows it works.
+- **Events**: `esp.onUpdateAvailable()`, `onUpdateStarted()`, `onUpdateProgress()` (percent, at most every 250 ms), `onUpdateCompleted()` just before the restart, and `onUpdateFailed()` with an `UpdateError`: `ServerUnreachable`, `HttpStatus` (with the code), `ManifestInvalid`, `VersionInvalid`, `TooOld`, `NoSpace`, `LowMemory`, `NoOtaPartition`, `Unsigned`, `DownloadFailed`, `SizeMismatch`, `HashMismatch`, `SignatureInvalid`, `WriteFailed` or `RolledBack`, named by `espmgr::toString()`.
+- **State**: `state()`, `available()` (version, notes, size), `progress()`, `lastError()`, `pending()`, and `lastResult()`, the last update attempt with its versions and outcome, kept across restarts until a Factory Reset. `esp.status().update` holds them too.
+- **Your own server**: certificates are checked against the public certificate authorities that Arduino-ESP32 ships, or only against `setRootCa(pem)` for a private one (not copied either). `addHeader("Authorization", "Bearer …")` sends a header with every request, up to 4; header values are never logged or shown. Redirects are followed, up to 3, and only to `https://`.
+- **Unsigned images**: without a Public Key every install is refused (`Unsigned`). `allowUnsigned()` installs unsigned images while you develop, still checking the SHA-256, and logs a warning at `begin()`. Don't ship it.
+
+The Management Interface gets an **Updates** tab once a server is set: the installed and available version with its notes, *Check for updates*, *Install update*, the progress and the last update. `esp.updates().ownerCanEdit()` (before `begin()`, after your own settings, which become the defaults) adds an **Updates** Section to the [Settings](#settings), where the Owner can change automatic checks, the interval in hours, the policy and the channel; `editableInManagement()` shows it in the Management Interface too. It uses the keys `upd-auto`, `upd-hours`, `upd-policy` and `upd-channel`.
+
+A sketch that never calls `esp.updates()` doesn't carry any of this, and confirms new firmware at once, as the platform does by itself.
+
 ### Branding
 
 Both web pages can carry your product's look. Set it at any time; the pages read it each time they load:
@@ -498,6 +568,7 @@ The pages fetch these from `GET /api/ui`, `GET /custom.css` and `GET /logo`, whi
 - [DeviceName](examples/DeviceName): the device's own name prefix, so each board is `lamp-` plus its MAC digits, and a WPA2 password for the Provisioning Portal's access point.
 - [Settings](examples/Settings): your own settings in two Sections, with validation, a password, some marked for the Management Interface, and `onSettingChanged`.
 - [NetworkTime](examples/NetworkTime): Network Time with the Owner's time zone, editable in both web pages, printing the local time every minute.
+- [Updates](examples/Updates): firmware updates from your own server, checked once a day and installed by the Owner from the Management Interface, with the progress printed. Needs the `min_spiffs.csv` partition table.
 - [Branding](examples/Branding): a title, an SVG logo, a fixed light theme and a teal accent in your own CSS, on both web pages.
 - [Diagnostics](examples/Diagnostics): a log handler printing the library's lines in its own format, and every minute the status, with why the device last started, and the Connection History.
 - [Button](examples/Button): the board's BOOT button opens the Provisioning Portal on a short press, starts a Network Reset when held for 5 seconds and a Factory Reset when held for 10, acting when it's let go. It's polled from `loop()` without `delay()`, and the serial monitor says what letting go will do. Build with `-D BUTTON_PIN=<n>` for another pin.
@@ -517,6 +588,8 @@ The pages fetch these from `GET /api/ui`, `GET /custom.css` and `GET /logo`, whi
 - Anyone in range of an open Provisioning Portal can read and change your Settings, and can replace or remove a password-type one, though not read it. If your Settings matter, give the portal a password. In the Management Interface, marked Settings are behind its login, and travel over plain HTTP like everything else on it.
 - Moving and removing Saved Networks, saving Settings, and on the Management Interface adding a network, restarting and the resets, need a header that only the device's own pages send, so another web site can't make the Owner's browser do them.
 - Passwords, password-type Settings included, never appear in the logs, the status or any page the device serves. They never reach a log handler either.
+- Firmware updates come only over HTTPS and are only installed when signed with your Signing Key, which never goes on the device. Keep it off your repository and your build server's logs. The keys in this repository's `test/keys/` are public and only for its tests.
+- An update can't brick a device by failing to start: until new firmware is confirmed, a restart goes back to the previous one. It does run whatever you signed, so a firmware that starts and connects but breaks something else stays.
 - The Connection History holds the names of the networks the device joined or tried. The Management Interface shows it behind its login; the Provisioning Portal doesn't serve it.
 
 ## Development
