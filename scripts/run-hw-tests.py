@@ -14,6 +14,11 @@ same password, and ESPMGR_TEST_SWITCH is a command that, given "a" or "b", makes
 broadcast the first or the second name (the rig's own script). Without both they are ignored.
 The access point is switched back to the first name when the run ends.
 
+For a test that updates itself (test_hw_ota), scripts/build-hw-tests.sh leaves its app image in
+app/<test>.bin next to the flash image. The script then serves signed Manifests and that image
+over HTTPS on port 8443, with the test-only keys in test/keys/, and tells each boot which version
+it is. The board must reach this host as 10.42.0.1, the address in the test certificate.
+
 Needs esptool (5.x) and pyserial. Exits non-zero when a test fails or the run does not finish.
 """
 
@@ -33,6 +38,11 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 import shlex
+import shutil
+import ssl
+import tempfile
+import threading
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import serial
 
@@ -44,6 +54,92 @@ SUMMARY = re.compile(r"^(?P<tests>\d+) Tests (?P<failures>\d+) Failures (?P<igno
 # Must match test/test_hw_espmanager/test_main.cpp. A password for the rig's board only.
 MANAGEMENT_USER = "admin"
 MANAGEMENT_PASSWORD = "rig-management"
+
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+KEYS = os.path.join(ROOT, "test", "keys")
+SIGN = os.path.join(ROOT, "scripts", "sign-firmware.py")
+UPDATE_PORT = 8443
+UPDATE_ADDRESS = "10.42.0.1"
+UPDATE_TIMEOUT = 900
+
+
+class QuietHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):
+        print(f"==> Update server: {format % args}", flush=True)
+
+
+class UpdateServer:
+    """The host side of test/test_hw_ota: serves the Manifests and the test's own app image as
+    the update, and tells each boot which version it runs (see the test for the four boots)."""
+
+    # The version each boot runs, and the version stable.json offers it.
+    BOOTS = {1: ("1.0.0", "2.0.0"), 2: ("2.0.0", "3.0.0"), 3: ("3.0.0", "3.0.0"),
+             4: ("2.0.0", "2.0.0")}
+    OTHER = {"app0": "app1", "app1": "app0"}
+
+    def __init__(self, image):
+        self.image = image
+        self.folder = tempfile.mkdtemp(prefix="espmgr-ota-")
+        self.boot = 0
+        self.first_slot = None
+        self.server = None
+
+    def start(self):
+        shutil.copy(self.image, os.path.join(self.folder, "firmware.bin"))
+        # The tampered Manifest offers the real image with a signature over something else.
+        other = os.path.join(self.folder, "other.bin")
+        with open(other, "wb") as file:
+            file.write(b"not the image")
+        self.sign(other, "9.0.0", "other.json")
+        with open(os.path.join(self.folder, "other.json"), encoding="utf-8") as file:
+            signature = json.load(file)["signature"]
+        self.sign(os.path.join(self.folder, "firmware.bin"), "9.0.0", "tampered.json",
+                  signature=signature)
+
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(os.path.join(KEYS, "test-server-cert.pem"),
+                                os.path.join(KEYS, "test-server-key.pem"))
+        handler = lambda *args, **kwargs: QuietHandler(*args, directory=self.folder, **kwargs)
+        self.server = ThreadingHTTPServer(("0.0.0.0", UPDATE_PORT), handler)
+        self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        print(f"==> Serving updates on port {UPDATE_PORT} from {self.folder}", flush=True)
+
+    def sign(self, image, version, name, signature=None):
+        out = os.path.join(self.folder, name)
+        subprocess.run([sys.executable, SIGN, "sign", "--key",
+                        os.path.join(KEYS, "test-signing-key.pem"), "--version", version,
+                        "--url", "firmware.bin", "--notes", f"Test release {version}",
+                        "--out", out, image], check=True)
+        if signature is not None:
+            with open(out, encoding="utf-8") as file:
+                manifest = json.load(file)
+            manifest["signature"] = signature
+            with open(out, "w", encoding="utf-8") as file:
+                json.dump(manifest, file)
+
+    def next_boot(self, slot):
+        """The answer to "ESPMGR-HW OTA <slot>": "<boot> <version> <server> <expected slot>"."""
+        if self.server is None:
+            self.start()
+        self.boot += 1
+        if self.boot == 1:
+            self.first_slot = slot
+            expected = "-"
+        elif self.boot == 3:
+            expected = self.first_slot
+        else:
+            expected = self.OTHER.get(self.first_slot, "?")
+        running, offered = self.BOOTS.get(self.boot, self.BOOTS[4])
+        self.sign(os.path.join(self.folder, "firmware.bin"), offered, "stable.json")
+        return f"{self.boot} {running} https://{UPDATE_ADDRESS}:{UPDATE_PORT}/ {expected}"
+
+    def stop(self):
+        if self.server is not None:
+            self.server.shutdown()
+            self.server.server_close()
+        shutil.rmtree(self.folder, ignore_errors=True)
 
 
 def flash(port, firmware):
@@ -277,7 +373,7 @@ class Switcher:
             print(f"==> Switching the access point back: {self.switch('a')}", flush=True)
 
 
-def run(conn, ssid, password, ssid_b, switcher, timeout_s):
+def run(conn, ssid, password, ssid_b, switcher, updates, timeout_s):
     """Talks to the board until Unity prints its summary. Returns (results, summary)."""
     results = []
     summary = None
@@ -336,6 +432,13 @@ def run(conn, ssid, password, ssid_b, switcher, timeout_s):
                 outcome = switcher.switch(which) if switcher.command else "no switch command"
                 print(f"==> Switched the access point to {which}: {outcome}", flush=True)
                 conn.write(f"SWITCH DONE {outcome}\n".encode())
+            elif line.startswith("ESPMGR-HW OTA "):
+                if updates is None:
+                    answer = "OTA NONE"
+                else:
+                    answer = "OTA " + updates.next_boot(line.split(" ", 2)[2])
+                print(f"==> {answer}", flush=True)
+                conn.write(f"{answer}\n".encode())
             elif (match := RESULT.match(line)):
                 results.append(match.groupdict())
             elif (match := SUMMARY.match(line)):
@@ -381,25 +484,38 @@ def main():
     switcher = Switcher(os.environ.get("ESPMGR_TEST_SWITCH", ""))
     ssid_b = os.environ.get("ESPMGR_TEST_SSID_B", "") if ssid and switcher.command else ""
 
+    updates = None
+    timeout = args.timeout
+    if args.firmware:
+        app = os.path.join(os.path.dirname(args.firmware), "app", os.path.basename(args.firmware))
+        if os.path.exists(app):
+            updates = UpdateServer(app)
+            timeout = max(timeout, UPDATE_TIMEOUT)
+
     start = time.monotonic()
     try:
         with open_port(args.port) as conn:
             if args.no_flash:
                 reset(conn)
-            results, summary = run(conn, ssid, password, ssid_b, switcher, args.timeout)
+            results, summary = run(conn, ssid, password, ssid_b, switcher, updates, timeout)
     finally:
         switcher.restore()
+        if updates is not None:
+            updates.stop()
     elapsed = time.monotonic() - start
 
     if args.junit:
         write_junit(args.junit, args.name, results, summary, elapsed)
 
     if summary is None:
-        print(f"==> The board did not finish within {args.timeout} s", flush=True)
+        print(f"==> The board did not finish within {timeout} s", flush=True)
         return 1
-    print(f"==> {summary['tests']} tests, {summary['failures']} failures, "
+    # A test that restarts the board reports earlier boots' results before the last summary.
+    failures = sum(r["status"] == "FAIL" for r in results)
+    print(f"==> {len(results)} results, {failures} failures; the last boot's summary: "
+          f"{summary['tests']} tests, {summary['failures']} failures, "
           f"{summary['ignored']} ignored", flush=True)
-    return 1 if summary["failures"] else 0
+    return 1 if failures or summary["failures"] else 0
 
 
 if __name__ == "__main__":

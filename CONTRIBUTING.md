@@ -48,13 +48,15 @@ The test that moves between two Saved Networks also needs `ESPMGR_TEST_SSID_B`, 
 
 `test_hw_settings` restarts the board halfway, to check that Settings survive on real NVS. Its tests before the restart print their results, and the summary at the end counts only the ones after it; a failure before the restart ends the run there. It also prints what 32 Settings cost in heap and how long reading them takes, which is where the figure in the README comes from.
 
+`test_hw_ota` updates the board over four boots: it refuses an image with a bad signature, installs version 2.0.0 and restarts into the other app slot, confirms it, installs 3.0.0, restarts without confirming it, and checks that the bootloader went back to 2.0.0. `run-hw-tests.py` serves the Manifests and the image (the test's own app image, which `build-hw-tests.sh` leaves in `app/test_hw_ota.bin`) over HTTPS on port 8443, signed with the test-only keys in `test/keys/`, and tells each boot which version it is. The test certificate is for `10.42.0.1`, so the board must reach your computer at that address, as on the test rig, whose Pi is the access point. It's built with the `-ota` environments (`esp32dev-ota` and so on), which use the `min_spiffs.csv` partition table; `build-examples.sh` uses them for `examples/Updates` too. Its run may take up to 15 minutes.
+
 The tests also print every Wi-Fi disconnect with the Wi-Fi stack's reason code and the signal, at the start of each test. `test_hw_espmanager` checks the Connection History after moving between the two networks; it prints the history as `history …` lines.
 
 ## Code
 
 - C++17, formatted with the repository's `.clang-format` (`scripts/check-format.sh` checks it).
 - `PascalCase` types, `camelCase` functions and methods, everything in `namespace espmgr`.
-- Core code in `src/core/` is plain C++. It reaches the hardware only through the interfaces in `src/core/` (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`), so it can be tested on a computer. Only `src/platform/` and the on-device tests in `test/test_hw_*/` may include Arduino or ESP-IDF headers (`scripts/check-includes.sh` checks it).
+- Core code in `src/core/` is plain C++. It reaches the hardware only through the interfaces in `src/core/` (`WifiDriver`, `Storage`, `Clock`, `HttpServer`, `LogSink`, `System`, `TimeDriver`, `UpdateDriver`), so it can be tested on a computer. Only `src/platform/` and the on-device tests in `test/test_hw_*/` may include Arduino or ESP-IDF headers (`scripts/check-includes.sh` checks it).
 - Nothing in the core blocks: work happens in small steps from `process()`.
 - Web pages live in `src/web/<page>/` and keep every piece of text in `src/web/strings.en.json`, so they can be translated later. After changing one, run `scripts/build-web.py` and commit the regenerated header with it (`scripts/build-web.py --check` checks it).
 - Every change to core behaviour comes with native tests in `test/`, using the fakes in `test/fakes/`.
