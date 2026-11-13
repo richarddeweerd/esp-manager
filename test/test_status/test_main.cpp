@@ -114,7 +114,10 @@ void test_status_json_has_every_field()
         R"("resetReason":"power-on","freeHeap":180000,)"
         R"("chip":"ESP32-C3 rev 4","firmware":"1.4.2","library":")" ESPMGR_VERSION R"(",)"
         R"("time":{"enabled":false,"synchronised":false,"epoch":0,"localTime":"","zone":"",)"
-        R"("dst":true,"posix":"UTC0","lastSync":0,"server":""}})";
+        R"("dst":true,"posix":"UTC0","lastSync":0,"server":""},)"
+        R"("update":{"configured":false,"state":"idle","channel":"","available":"",)"
+        R"("progress":0,"pending":false,"last":{"outcome":"none","from":"","to":"",)"
+        R"("method":"manual","error":"none","epoch":0}}})";
     TEST_ASSERT_EQUAL_STRING(expected.c_str(), json.str().c_str());
 }
 

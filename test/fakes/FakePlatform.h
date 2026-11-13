@@ -6,6 +6,7 @@
 #include "FakeStorage.h"
 #include "FakeSystem.h"
 #include "FakeTimeDriver.h"
+#include "FakeUpdateDriver.h"
 #include "FakeWifiDriver.h"
 #include "core/Platform.h"
 
@@ -22,7 +23,8 @@ struct FakePlatform
     FakeLogSink log;
     FakeSystem system;
     FakeTimeDriver time;
-    Platform platform{wifi, storage, clock, http, log, system, time};
+    FakeUpdateDriver updates;
+    Platform platform{wifi, storage, clock, http, log, system, time, &updates};
 };
 
 }  // namespace espmgr

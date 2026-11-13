@@ -36,6 +36,16 @@ void EspManager::begin()
     history_.begin();
     connection_.begin();
     time_.begin();
+    if (updates_)
+    {
+        updates_->begin();
+    }
+    else if (platform_.system.firmwarePending())
+    {
+        // Updates aren't used: accept firmware installed some other way (ArduinoOTA) at once,
+        // as the platform does by itself.
+        platform_.system.confirmFirmware();
+    }
     portal_.begin();
     management_.begin();
 }
@@ -56,6 +66,15 @@ void EspManager::process()
     scanner_.process();
     connection_.process();
     time_.process();
+    if (updates_)
+    {
+        updates_->process();
+    }
+    if (portalAfterUpdate_ && !(updates_ && updates_->busy()))
+    {
+        portalAfterUpdate_ = false;
+        portal_.start();
+    }
     routes_.handle();
     portal_.process();
     management_.process();
@@ -130,6 +149,10 @@ DeviceStatus EspManager::status() const
     status.time.dst = time_.dst();
     status.time.posix = time_.timezone();
     status.time.lastSync = time_.lastSync();
+    if (updates_)
+    {
+        updates_->writeStatus(status.update);
+    }
     return status;
 }
 
@@ -191,6 +214,13 @@ bool EspManager::setNamePrefix(const std::string& prefix)
 
 void EspManager::startPortal()
 {
+    if (updates_ && updates_->busy())
+    {
+        // The portal's scan and channel change would break the download.
+        log_.info("core", "the Provisioning Portal opens once the update is done");
+        portalAfterUpdate_ = true;
+        return;
+    }
     portal_.start();
 }
 
@@ -284,6 +314,30 @@ NetworkTime& EspManager::ntp()
     return time_;
 }
 
+UpdateManager& EspManager::updates()
+{
+    if (!updates_)
+    {
+        UpdateManager::Hooks hooks{[this] { return firmwareVersion_; },
+                                   [this] { return portal_.state() == PortalState::Active; },
+                                   [this] { return time_.synchronised() ? time_.now() : 0; },
+                                   [this] { restart(); }};
+        updates_ =
+            std::make_unique<UpdateManager>(platform_.clock, platform_.system, platform_.storage,
+                                            connection_, events_, log_, std::move(hooks));
+        if (platform_.updates != nullptr)
+        {
+            updates_->attach(*platform_.updates);
+        }
+        if (begun_)
+        {
+            // Called first after begin(): pending firmware was confirmed there already.
+            updates_->begin();
+        }
+    }
+    return *updates_;
+}
+
 SavedNetworks& EspManager::networks()
 {
     return networks_;
@@ -355,6 +409,36 @@ EspManager& EspManager::onTimeSynced(std::function<void(const TimeSyncInfo&)> li
 EspManager& EspManager::onTimeSyncFailed(std::function<void()> listener)
 {
     events_.timeSyncFailed.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateAvailable(std::function<void(const UpdateInfo&)> listener)
+{
+    events_.updateAvailable.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateStarted(std::function<void(const UpdateInfo&)> listener)
+{
+    events_.updateStarted.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateProgress(std::function<void(const UpdateProgress&)> listener)
+{
+    events_.updateProgress.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateCompleted(std::function<void(const UpdateInfo&)> listener)
+{
+    events_.updateCompleted.add(std::move(listener));
+    return *this;
+}
+
+EspManager& EspManager::onUpdateFailed(std::function<void(const UpdateError&)> listener)
+{
+    events_.updateFailed.add(std::move(listener));
     return *this;
 }
 

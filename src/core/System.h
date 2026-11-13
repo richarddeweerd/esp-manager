@@ -68,6 +68,12 @@ public:
 
     // Restarts the chip; doesn't return on the device.
     virtual void restart() = 0;
+
+    // Whether the running firmware is pending: installed by an update and not confirmed yet, so
+    // the bootloader goes back to the previous firmware at the next reset (EP17).
+    virtual bool firmwarePending() const = 0;
+    // Confirms the running firmware, so the bootloader keeps it.
+    virtual void confirmFirmware() = 0;
 };
 
 }  // namespace espmgr

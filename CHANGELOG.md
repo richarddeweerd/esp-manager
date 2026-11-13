@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Firmware updates, core (#44): `esp.updates()` checks the Update Server's Manifest (`setServer()` + `setChannel()`, `stable` by default, fetching `<server><channel>.json`), compares versions by SemVer against `esp.setFirmwareVersion()`, and installs a newer image after checking its size, SHA-256 and ECDSA P-256 signature (`setPublicKey()`; without one installs are refused unless `allowUnsigned()`). `setRootCa()`, `addHeader()`, `setAutoCheck()` (off), `setCheckInterval()` (24 hours), `setInstallPolicy(Notify|Install)`, `setInstallCondition()`, `setRestartAfterInstall()`, `confirmManually()`/`markValid()`, `check()`, `install()`, `state()`, `available()`, `progress()`, `lastResult()`. New firmware is confirmed once it connects or has run for 10 minutes; a rolled-back update is reported. Events `onUpdateAvailable`, `onUpdateStarted`, `onUpdateProgress`, `onUpdateCompleted`, `onUpdateFailed`; `esp.status().update` and `GET /api/status` report it. The ESP32 driver follows in #45.
+
 ## [0.5.0] - 2026-11-12
 
 Network Time.

@@ -29,9 +29,22 @@ public:
         ++restarts;
     }
 
+    bool firmwarePending() const override
+    {
+        return pending;
+    }
+
+    void confirmFirmware() override
+    {
+        pending = false;
+        ++confirms;
+    }
+
     uint32_t heap = 180000;
     std::string chip = "ESP32-C3 rev 4";
     int restarts = 0;
+    bool pending = false;
+    int confirms = 0;
     ResetReason reset = ResetReason::PowerOn;
 };
 
